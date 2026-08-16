@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.andressm415.omaprox",
+  "name": "Omaprox",
+  "version": "1.0.0",
+  "author": "AndresSM415",
+  "license": "MIT",
+  "description": "Read-only Proxmox VE dashboard in the Omarchy bar: every container and VM with a status LED, per-guest stats, and one key to a console.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "activation": "on-demand",
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Omaprox",
+    "description": "Browse every LXC and QEMU guest on a Proxmox VE cluster with a status LED per row, drill into one for CPU, memory, disk and network, and open a console — pct enter for containers, SSH for Linux VMs, xfreerdp3 for Windows. Nothing in the panel starts, stops or reconfigures a guest.",
+    "category": "System",
+    "aliases": [
+      "proxmox",
+      "omaprox",
+      "pve",
+      "homelab"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "host": "",
+      "credentialsPath": "",
+      "refreshIntervalSec": 10,
+      "verifyTls": "Off",
+      "caCert": "",
+      "nodeSshUser": "root",
+      "guestSshUser": "root",
+      "rdpUser": "",
+      "lxcConsoleCommand": "",
+      "vmConsoleCommand": "",
+      "rdpCommand": "",
+      "memWarnPercent": 90,
+      "showTemplates": "Off",
+      "agentAddresses": "Off"
+    },
+    "schema": [
+      {
+        "key": "host",
+        "type": "string",
+        "label": "Proxmox host",
+        "description": "Address of any node in the cluster, for example pve01.lan or https://10.0.20.2:8006. The scheme defaults to https and the port to 8006.",
+        "defaultValue": ""
+      },
+      {
+        "key": "credentialsPath",
+        "type": "path",
+        "label": "API token file",
+        "description": "File holding the API token, kept out of shell.json so the secret is not in your config. Defaults to ~/.config/omaprox/token.",
+        "defaultValue": ""
+      },
+      {
+        "key": "refreshIntervalSec",
+        "type": "integer",
+        "label": "Refresh interval (seconds)",
+        "description": "How often the guest list and node meters are re-read. Per-guest stats refresh at this rate too, but only for the guest on screen.",
+        "min": 5,
+        "max": 300,
+        "step": 5,
+        "defaultValue": 10
+      },
+      {
+        "key": "verifyTls",
+        "type": "enum",
+        "label": "Verify the TLS certificate",
+        "description": "Off by default because Proxmox ships a self-signed certificate. Turn this On once you have a real certificate, or point 'CA certificate' at your own CA.",
+        "options": [
+          "Off",
+          "On"
+        ],
+        "defaultValue": "Off"
+      },
+      {
+        "key": "caCert",
+        "type": "path",
+        "label": "CA certificate",
+        "description": "PEM file for the CA that signed the Proxmox certificate. Setting this verifies the connection against it, whatever 'Verify the TLS certificate' says.",
+        "defaultValue": ""
+      },
+      {
+        "key": "nodeSshUser",
+        "type": "string",
+        "label": "SSH user for the node",
+        "description": "Used by the container console, which runs pct enter on the node the container lives on.",
+        "defaultValue": "root"
+      },
+      {
+        "key": "guestSshUser",
+        "type": "string",
+        "label": "SSH user for Linux VMs",
+        "description": "Used by the VM console, which connects to the guest itself rather than to its node.",
+        "defaultValue": "root"
+      },
+      {
+        "key": "rdpUser",
+        "type": "string",
+        "label": "Windows username",
+        "description": "Pre-fills the username for Windows consoles so FreeRDP only asks for the password. Leave blank to be asked for both. There is no password setting on purpose — a password here would live in shell.json, and FreeRDP asks for it in the terminal instead.",
+        "defaultValue": ""
+      },
+      {
+        "key": "lxcConsoleCommand",
+        "type": "string",
+        "label": "Container console command",
+        "description": "Runs in a floating terminal. Placeholders: {vmid} {name} {node} {address} {nodeUser} {guestUser}. Blank uses: ssh -t {nodeUser}@{node} pct enter {vmid}",
+        "defaultValue": ""
+      },
+      {
+        "key": "vmConsoleCommand",
+        "type": "string",
+        "label": "Linux VM console command",
+        "description": "Runs in a floating terminal. Same placeholders. Blank uses: ssh -t {guestUser}@{address}",
+        "defaultValue": ""
+      },
+      {
+        "key": "rdpCommand",
+        "type": "string",
+        "label": "Windows VM console command",
+        "description": "Launched directly, not in a terminal. Same placeholders. Blank uses: xfreerdp3 /v:{address} /dynamic-resolution +clipboard",
+        "defaultValue": ""
+      },
+      {
+        "key": "memWarnPercent",
+        "type": "integer",
+        "label": "Memory warning (%)",
+        "description": "A guest or node over this share of its memory gets a red LED and appears under Needs attention.",
+        "min": 50,
+        "max": 100,
+        "step": 5,
+        "defaultValue": 90
+      },
+      {
+        "key": "showTemplates",
+        "type": "enum",
+        "label": "List templates",
+        "description": "Templates are never running, so they are hidden by default and would otherwise fill the list with permanently dark LEDs.",
+        "options": [
+          "Off",
+          "On"
+        ],
+        "defaultValue": "Off"
+      },
+      {
+        "key": "agentAddresses",
+        "type": "enum",
+        "label": "Read VM addresses from the guest agent",
+        "description": "Off by default: this is the one call that needs VM.Monitor rather than VM.Audit, so leaving it Off keeps the token strictly read-only. With it Off, a VM console falls back to the guest's name as a hostname.",
+        "options": [
+          "Off",
+          "On"
+        ],
+        "defaultValue": "Off"
+      }
+    ]
+  }
+}

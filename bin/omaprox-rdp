@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+# Open a remote desktop, asking for credentials once and remembering them.
+#
+#   omaprox-rdp <address> <label> [extra xfreerdp args...]
+#
+# Run with no terminal attached (which is how the bar launches it) this is
+# silent when it already knows the credentials: the desktop opens and no
+# terminal ever appears. Only when it has nothing saved, or what it had is
+# refused, does it open a terminal to ask — and that terminal closes once the
+# session is up, rather than sitting behind the desktop for the rest of it.
+#
+# Credentials live in the login keyring via libsecret, never in shell.json and
+# never on the command line: FreeRDP is handed its arguments on a pipe with
+# /args-from, because /proc/<pid>/cmdline is world-readable and a /p: argument
+# would show the password to every process on the machine.
+
+set -uo pipefail
+
+ADDRESS=${1:-}
+LABEL=${2:-${1:-}}
+shift 2 2>/dev/null || true
+EXTRA_ARGS=("$@")
+
+if [[ -z $ADDRESS ]]; then
+  echo "usage: omaprox-rdp <address> <label> [xfreerdp args...]" >&2
+  exit 2
+fi
+
+command -v xfreerdp3 >/dev/null 2>&1 || {
+  echo "xfreerdp3 is not installed. Install the 'freerdp' package." >&2
+  exit 127
+}
+
+HAVE_KEYRING=0
+command -v secret-tool >/dev/null 2>&1 && HAVE_KEYRING=1
+
+SCHEMA=(service omaprox host "$ADDRESS")
+
+# `secret-tool search` splits its output: label and secret to stdout, the
+# attributes to stderr. Discarding stderr loses the very fields being read;
+# discarding stdout is what we want, since it keeps the password out of the pipe.
+attribute() {
+  ((HAVE_KEYRING)) || return 1
+  secret-tool search "${SCHEMA[@]}" 2>&1 >/dev/null |
+    sed -n "s/^ *attribute\.$1 = //p" | head -1
+}
+
+lookup_password() { ((HAVE_KEYRING)) && secret-tool lookup "${SCHEMA[@]}" 2>/dev/null; }
+forget()          { ((HAVE_KEYRING)) && secret-tool clear "${SCHEMA[@]}" 2>/dev/null; return 0; }
+
+remember() {
+  ((HAVE_KEYRING)) || return 0
+  printf '%s' "$3" | secret-tool store --label="Omaprox — $LABEL" \
+    "${SCHEMA[@]}" username "$1" domain "$2" 2>/dev/null
+}
+
+# One argument per line, to be piped into /args-from:stdin.
+emit_args() {
+  printf '/v:%s\n' "$ADDRESS"
+  printf '/u:%s\n' "$1"
+  printf '/p:%s\n' "$2"
+  [[ -n $3 ]] && printf '/d:%s\n' "$3"
+  # Proxmox self-signs, and a workgroup Windows box signs its own RDP
+  # certificate too, so verification would refuse every connection.
+  printf '/cert:ignore\n'
+  # NTLM only. Without this FreeRDP tries Kerberos first and, on a machine with
+  # a stock /etc/krb5.conf whose default_realm is ATHENA.MIT.EDU, spends several
+  # seconds failing against MIT's realm and fills the screen with errors that
+  # have nothing to do with the login being attempted.
+  printf '/auth-pkg-list:none,ntlm\n'
+  printf '/dynamic-resolution\n+clipboard\n'
+  local arg
+  for arg in ${EXTRA_ARGS+"${EXTRA_ARGS[@]}"}; do
+    [[ -n $arg ]] && printf '%s\n' "$arg"
+  done
+}
+
+# Is the RDP port actually open? Answering this ourselves is what lets the watch
+# below ask only one question — were the credentials refused. Inferring
+# reachability from FreeRDP's log instead means enumerating everything a
+# *successful* run can print, and getting that list wrong reports correct
+# passwords as an unreachable host.
+reachable() {
+  local host=$ADDRESS port=3389
+  case $ADDRESS in
+    \[*\]:*) host=${ADDRESS%]:*}; host=${host#[}; port=${ADDRESS##*]:} ;;
+    \[*\])   host=${ADDRESS#[}; host=${host%]} ;;
+    *:*)     host=${ADDRESS%:*}; port=${ADDRESS##*:} ;;
+  esac
+  timeout 6 bash -c "exec 3<>/dev/tcp/$host/$port" 2>/dev/null
+}
+
+REFUSED_RE="ERRCONNECT_(LOGON_FAILURE|ACCOUNT_[A-Z_]+|PASSWORD_[A-Z_]+|ACCESS_DENIED|AUTHENTICATION_FAILED)"
+
+# Start the real session and watch it just long enough to tell whether the login
+# was accepted. 0 = connected, 1 = refused, 2 = could not reach the host.
+#
+# There is deliberately no separate +auth-only probe. Authenticating, dropping
+# the connection and immediately reconnecting makes Windows spend a minute or
+# more letting the second one in — the desktop appears as a black window and
+# hangs there. Connecting once and reading the outcome as it happens costs
+# nothing and keeps the session instant.
+#
+# A rejection lands within a second or two, so a connection still healthy after
+# the watch window is a connection that authenticated.
+launch_watched() {
+  reachable || return 2
+
+  local log args waited=0
+  log=$(mktemp) || return 2
+  args=$(emit_args "$1" "$2" "$3")
+
+  # setsid so the session survives this script and the terminal that ran it.
+  setsid bash -c 'printf "%s\n" "$1" | xfreerdp3 /args-from:stdin' _ "$args" >"$log" 2>&1 &
+
+  while ((waited < 24)); do
+    if grep -qE "$REFUSED_RE" "$log" 2>/dev/null; then
+      rm -f "$log"
+      return 1
+    fi
+    sleep 0.25
+    ((waited++))
+  done
+
+  # The log is dropped, not read further: the session owns the descriptor and
+  # keeps writing to it for as long as it runs.
+  rm -f "$log"
+  return 0
+}
+
+ask() {
+  local default_user=$1 default_domain=$2
+  echo
+  echo "  $LABEL  ·  $ADDRESS"
+  echo
+  if [[ -n $default_user ]]; then
+    read -rp "  Username [$default_user]: " USERNAME
+    USERNAME=${USERNAME:-$default_user}
+  else
+    read -rp "  Username: " USERNAME
+  fi
+  read -rsp "  Password: " PASSWORD
+  echo
+  # A local Windows account has no domain, which is the common case for a
+  # workgroup PC, so blank is offered as the answer rather than demanded.
+  read -rp "  Domain (blank for a local account) [${default_domain:-none}]: " DOMAIN
+  DOMAIN=${DOMAIN:-$default_domain}
+  echo
+}
+
+# ---------------------------------------------------------------- no terminal
+
+# Launched from the bar: stdin is not a tty. Succeed silently if possible,
+# otherwise re-launch inside a terminal that can ask.
+if [[ ! -t 0 ]]; then
+  PASSWORD=$(lookup_password) || PASSWORD=""
+  if [[ -n $PASSWORD ]]; then
+    USERNAME=$(attribute username) || USERNAME=""
+    DOMAIN=$(attribute domain) || DOMAIN=""
+    launch_watched "$USERNAME" "$PASSWORD" "$DOMAIN"
+    case $? in
+      0) exit 0 ;;          # connected — nothing was ever on screen but the desktop
+      2) ;;                 # host down — fall through so the terminal says so
+      *) forget ;;          # refused — stop trying them and ask again
+    esac
+  fi
+
+  quoted=$(printf '%q ' "$0" "$ADDRESS" "$LABEL" ${EXTRA_ARGS+"${EXTRA_ARGS[@]}"})
+  exec setsid uwsm-app -- xdg-terminal-exec \
+    --app-id=org.omarchy.terminal \
+    --title="$LABEL  ·  sign in" \
+    -e bash -c "$quoted"
+fi
+
+# ---------------------------------------------------------------- terminal
+
+((HAVE_KEYRING)) || echo "  secret-tool not found — credentials cannot be saved."
+
+USERNAME=$(attribute username) || USERNAME=""
+DOMAIN=$(attribute domain) || DOMAIN=""
+PASSWORD=""
+
+for attempt in 1 2 3; do
+  ask "$USERNAME" "$DOMAIN"
+  printf '  Connecting… '
+  launch_watched "$USERNAME" "$PASSWORD" "$DOMAIN"
+  case $? in
+    0)
+      echo "connected"
+      remember "$USERNAME" "$DOMAIN" "$PASSWORD" \
+        && echo "  Saved to the login keyring — you will not be asked again." \
+        || echo "  Could not save to the keyring."
+      exit 0
+      ;;
+    2)
+      echo "cannot reach $ADDRESS"
+      echo
+      read -rp "  press enter to close "
+      exit 1
+      ;;
+    *)
+      echo "rejected"
+      [[ $attempt -lt 3 ]] && echo "  Wrong username or password — try again."
+      ;;
+  esac
+done
+
+echo
+echo "  Giving up after 3 attempts."
+read -rp "  press enter to close "
+exit 1

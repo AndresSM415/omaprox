@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Open an SSH console, setting up key authentication the first time so there is
+# never a password prompt again.
+#
+#   omaprox-ssh <user> <host> [command...]
+#
+# Deliberately does NOT store an SSH password anywhere. A stored password is a
+# worse version of the thing SSH already solves properly: an authorized key is
+# remembered by the server, survives password changes, can be revoked on its
+# own, and is never transmitted. So the first connection offers to install your
+# public key — one password, once — and every connection after that is silent.
+#
+# Answer no and it simply connects; you will be asked for a password each time,
+# which is the same behaviour as before.
+
+set -uo pipefail
+
+USER_NAME=${1:-root}
+HOST=${2:-}
+shift 2 2>/dev/null || true
+REMOTE_COMMAND=("$@")
+
+if [[ -z $HOST ]]; then
+  echo "usage: omaprox-ssh <user> <host> [command...]" >&2
+  exit 2
+fi
+
+TARGET="$USER_NAME@$HOST"
+
+connect() {
+  if ((${#REMOTE_COMMAND[@]})); then
+    exec ssh -t "$TARGET" "${REMOTE_COMMAND[@]}"
+  else
+    exec ssh -t "$TARGET"
+  fi
+}
+
+# Already trusted? Then nothing to arrange — go straight in. BatchMode makes ssh
+# fail rather than fall back to asking, which is what makes this a test.
+if ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new \
+       "$TARGET" true 2>/dev/null; then
+  connect
+fi
+
+# No key auth. Is there a key to offer?
+KEY=""
+for candidate in "$HOME/.ssh/id_ed25519.pub" "$HOME/.ssh/id_rsa.pub" "$HOME/.ssh/id_ecdsa.pub"; do
+  [[ -f $candidate ]] && { KEY=$candidate; break; }
+done
+
+if [[ -z $KEY ]] || ! command -v ssh-copy-id >/dev/null 2>&1; then
+  connect
+fi
+
+cat <<EOF
+
+  $TARGET asks for a password every time.
+
+  Installing your public key makes that the last one:
+      $KEY
+
+  This appends the key to ~/.ssh/authorized_keys on $HOST. It grants this
+  machine passwordless access to that account until you remove the key there.
+
+EOF
+
+read -rp "  Install it now? [y/N] " reply
+echo
+
+case ${reply,,} in
+  y | yes)
+    if ssh-copy-id -i "$KEY" "$TARGET"; then
+      echo
+      echo "  Installed. This is the last time you will be asked."
+      echo
+    else
+      echo
+      echo "  Could not install the key — connecting with a password instead."
+      echo
+    fi
+    ;;
+  *)
+    echo "  Skipped. Connecting with a password."
+    echo
+    ;;
+esac
+
+connect

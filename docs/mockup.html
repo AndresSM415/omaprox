@@ -1,0 +1,1048 @@
+<title>Omaprox — Proxmox panel for Omarchy</title>
+
+<style>
+  :root {
+    color-scheme: light dark;
+
+    /* page chrome — cool blueprint paper */
+    --paper: #e7eaed;
+    --paper-2: #dde1e5;
+    --ink: #171b20;
+    --ink-2: #4d5860;
+    --ink-3: #79838c;
+    --rule: #c5ccd2;
+
+    /* the shell panel is a screenshot: dark in both themes */
+    --panel-bg: #0d1013;
+    --panel-bg-2: #12161a;
+    --panel-edge: #e57000;
+    --fg: #c6ced6;
+    --fg-dim: #68747f;
+    --fg-faint: #414b54;
+    --track: rgba(198, 206, 214, 0.14);
+    --sel: rgba(198, 206, 214, 0.07);
+    --sel-edge: rgba(198, 206, 214, 0.22);
+
+    --accent: #e57000;
+    --run: #5cc46b;
+    --stop: #4a545e;
+    --pause: #e0a33e;
+    --crit: #e0524e;
+
+    --mono: "CaskaydiaMono Nerd Font", "JetBrains Mono", "Cascadia Code",
+            ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --prose: Charter, "Bitstream Charter", "Iowan Old Style", "Source Serif Pro", Georgia, serif;
+
+    --desk-1: #10161b;
+    --desk-2: #1c2b30;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0b0e11;
+      --paper-2: #12161a;
+      --ink: #d8dee4;
+      --ink-2: #97a2ab;
+      --ink-3: #6d7883;
+      --rule: #232a31;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0b0e11;
+    --paper-2: #12161a;
+    --ink: #d8dee4;
+    --ink-2: #97a2ab;
+    --ink-3: #6d7883;
+    --rule: #232a31;
+  }
+  :root[data-theme="light"] {
+    --paper: #e7eaed;
+    --paper-2: #dde1e5;
+    --ink: #171b20;
+    --ink-2: #4d5860;
+    --ink-3: #79838c;
+    --rule: #c5ccd2;
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: clamp(32px, 6vw, 76px) clamp(18px, 4vw, 40px) 96px;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(44px, 6vw, 72px);
+  }
+
+  /* ---------------------------------------------------------------- header */
+
+  .masthead { display: flex; flex-direction: column; gap: 18px; }
+
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .eyebrow b { color: var(--accent); font-weight: 700; }
+
+  h1 {
+    font-size: clamp(38px, 7vw, 62px);
+    line-height: 0.98;
+    letter-spacing: -0.035em;
+    font-weight: 700;
+    text-wrap: balance;
+    margin: 0;
+  }
+  h1 span { color: var(--accent); }
+
+  .lede {
+    font-family: var(--prose);
+    font-size: 18px;
+    line-height: 1.6;
+    max-width: 62ch;
+    color: var(--ink-2);
+  }
+  .lede em { color: var(--ink); font-style: italic; }
+
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: 4px;
+  }
+  .fact {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    padding: 4px 9px;
+  }
+  .fact.hot { border-color: var(--accent); color: var(--accent); }
+
+  /* ---------------------------------------------------------------- section */
+
+  section { display: flex; flex-direction: column; gap: 22px; }
+
+  .sec-head { display: flex; flex-direction: column; gap: 8px; }
+  .sec-num {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+  h2 {
+    font-size: 22px;
+    letter-spacing: -0.02em;
+    font-weight: 700;
+    margin: 0;
+  }
+  .sec-head p {
+    font-family: var(--prose);
+    font-size: 16.5px;
+    color: var(--ink-2);
+    max-width: 68ch;
+    margin: 0;
+  }
+
+  /* ---------------------------------------------------------- desktop stage */
+
+  .stage {
+    background:
+      radial-gradient(120% 100% at 22% 0%, var(--desk-2) 0%, var(--desk-1) 62%);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 0 0 34px;
+    overflow-x: auto;
+  }
+
+  /* the omarchy bar */
+  .bar {
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 16px;
+    padding: 0 16px;
+    background: rgba(9, 12, 15, 0.55);
+    border-bottom: 1px solid rgba(198, 206, 214, 0.08);
+    color: var(--fg-dim);
+    font-size: 12px;
+  }
+  .bar .left { margin-right: auto; display: flex; align-items: center; gap: 14px; }
+  .ws { display: flex; gap: 6px; align-items: center; }
+  .ws i {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--fg-faint); display: block;
+  }
+  .ws i.on { background: var(--fg); width: 14px; border-radius: 3px; }
+  .bar-item { display: flex; align-items: center; gap: 6px; }
+  .bar-item.active { color: var(--fg); position: relative; }
+  .bar-item.active::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -9px;
+    height: 2px; background: var(--accent); border-radius: 1px;
+  }
+  .bar-count { font-size: 11px; letter-spacing: 0.04em; }
+
+  .panels {
+    display: flex;
+    gap: 20px;
+    padding: 22px 24px 0;
+    align-items: flex-start;
+    min-width: min-content;
+  }
+
+  /* ---------------------------------------------------------------- panel */
+
+  .panel {
+    width: 334px;
+    flex: 0 0 334px;
+    background: var(--panel-bg);
+    border: 1px solid rgba(229, 112, 0, 0.55);
+    border-radius: 3px;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+    color: var(--fg);
+    font-size: 12.5px;
+    line-height: 1.35;
+    padding: 13px 13px 11px;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+  }
+
+  .hero { display: flex; align-items: flex-start; gap: 10px; }
+  .hero .mark { flex: 0 0 auto; margin-top: 2px; }
+  .hero .txt { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+  .hero .title {
+    font-size: 16px;
+    letter-spacing: -0.01em;
+    color: var(--fg);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .hero .meta { font-size: 11px; color: var(--fg-dim); }
+  .badge {
+    flex: 0 0 auto;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    padding: 2px 6px;
+    border: 1px solid var(--fg-faint);
+    border-radius: 2px;
+    color: var(--fg-dim);
+    white-space: nowrap;
+  }
+  .badge.run { color: var(--run); border-color: rgba(92, 196, 107, 0.5); }
+  .badge.warn { color: var(--pause); border-color: rgba(224, 163, 62, 0.5); }
+
+  .rule { height: 1px; background: var(--track); margin: 3px 0 1px; }
+
+  .shead {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--fg-dim);
+    padding: 2px 0 1px;
+  }
+
+  .rows { display: flex; flex-direction: column; gap: 1px; }
+
+  /* a guest row: [terminal button] [led] [vmid] [name/detail] [trailing] */
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 6px;
+    border: 1px solid transparent;
+    border-radius: 2px;
+  }
+  .row.cursor { background: var(--sel); border-color: var(--sel-edge); }
+  .row.hovered { background: rgba(198, 206, 214, 0.04); }
+
+  .tbtn {
+    flex: 0 0 auto;
+    width: 21px; height: 21px;
+    display: grid; place-items: center;
+    border: 1px solid var(--fg-faint);
+    border-radius: 2px;
+    color: var(--fg-dim);
+  }
+  .row.cursor .tbtn, .row.hovered .tbtn { color: var(--fg); border-color: var(--fg-dim); }
+  .tbtn.rdp { color: #6aa6d8; border-color: rgba(106, 166, 216, 0.42); }
+  .tbtn.off { opacity: 0.34; }
+
+  .led {
+    flex: 0 0 auto;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--stop);
+  }
+  .led.run { background: var(--run); box-shadow: 0 0 6px rgba(92, 196, 107, 0.75); }
+  .led.pause { background: var(--pause); box-shadow: 0 0 6px rgba(224, 163, 62, 0.55); }
+  .led.crit { background: var(--crit); box-shadow: 0 0 7px rgba(224, 82, 78, 0.8); }
+  .led.stop { background: transparent; box-shadow: inset 0 0 0 1.5px var(--stop); }
+
+  .vmid {
+    flex: 0 0 auto;
+    width: 26px;
+    color: var(--fg-faint);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .name b { font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .name small {
+    font-size: 10.5px;
+    color: var(--fg-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .row.alarm .name b { color: var(--crit); }
+  .row.dimmed .name b { color: var(--fg-dim); }
+
+  .trail {
+    flex: 0 0 auto;
+    font-size: 10.5px;
+    color: var(--fg-dim);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  /* meters */
+  .stat { display: flex; flex-direction: column; gap: 5px; padding: 6px 6px 7px; }
+  .stat .line { display: flex; align-items: baseline; gap: 10px; }
+  .stat .line b { font-weight: 400; flex: 1; }
+  .stat .line span { font-size: 11px; color: var(--fg); font-variant-numeric: tabular-nums; }
+  .stat .line span.mute { color: var(--fg-dim); }
+  .stat .sub { font-size: 10.5px; color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+  .meter { height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; }
+  .meter i { display: block; height: 100%; border-radius: 2px; background: var(--fg); }
+  .meter i.warn { background: var(--pause); }
+  .meter i.crit { background: var(--crit); }
+
+  /* node rows carry two meters, so each one says which */
+  .mrow { display: flex; align-items: center; gap: 8px; }
+  .mrow em {
+    flex: 0 0 22px;
+    font-style: normal;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+  }
+  .mrow .meter { flex: 1; }
+  .mrow span {
+    flex: 0 0 62px;
+    text-align: right;
+    font-size: 10.5px;
+    color: var(--fg-dim);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .kv { display: flex; gap: 10px; padding: 3px 6px; font-size: 11.5px; }
+  .kv b { font-weight: 400; color: var(--fg-dim); flex: 0 0 74px; }
+  .kv span { color: var(--fg); min-width: 0; }
+  .kv span.mute { color: var(--fg-dim); }
+  .kv span.ok { color: var(--run); }
+
+  .legend {
+    font-size: 10.5px;
+    color: var(--fg-dim);
+    padding-top: 4px;
+    line-height: 1.5;
+  }
+
+  /* --------------------------------------------------------- popup windows */
+
+  .popups {
+    display: flex;
+    gap: 20px;
+    padding: 26px 24px 0;
+    align-items: flex-start;
+    min-width: min-content;
+  }
+
+  .win {
+    background: var(--panel-bg);
+    border: 1px solid rgba(198, 206, 214, 0.18);
+    border-radius: 4px;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    flex: 1 1 380px;
+    min-width: 340px;
+  }
+  .win.focused { border-color: rgba(229, 112, 0, 0.55); }
+  .win-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px;
+    background: var(--panel-bg-2);
+    border-bottom: 1px solid rgba(198, 206, 214, 0.1);
+    font-size: 11px;
+    color: var(--fg-dim);
+  }
+  .win-bar .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--fg-faint); }
+  .win.focused .win-bar .dot { background: var(--accent); }
+  .win-body {
+    padding: 12px;
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--fg);
+    min-height: 176px;
+  }
+  .win-body .p { color: var(--run); }
+  .win-body .d { color: var(--fg-dim); }
+  .win-body .c { color: #6aa6d8; }
+  .caret {
+    display: inline-block;
+    width: 7px; height: 13px;
+    background: var(--fg);
+    vertical-align: -2px;
+    animation: blink 1.1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .caret { animation: none; } }
+
+  .rdp-body {
+    min-height: 176px;
+    padding: 0;
+    background: linear-gradient(160deg, #1d2a3a 0%, #16202c 100%);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+  .rdp-note {
+    margin: auto;
+    text-align: center;
+    font-size: 11px;
+    color: rgba(198, 206, 214, 0.5);
+    line-height: 1.7;
+  }
+  .rdp-task {
+    height: 26px;
+    background: rgba(9, 12, 16, 0.72);
+    border-top: 1px solid rgba(198, 206, 214, 0.08);
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 10px;
+    font-size: 10.5px;
+    color: var(--fg-dim);
+  }
+
+  .cap {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--fg-dim);
+    padding-top: 9px;
+  }
+  .cap b { color: var(--fg); font-weight: 400; }
+
+  /* ---------------------------------------------------------------- tables */
+
+  .grid2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 26px 40px;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 10px 7px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    font-weight: 400;
+  }
+  td.k { color: var(--ink); white-space: nowrap; width: 1%; padding-right: 18px; }
+  td.v { color: var(--ink-2); font-family: var(--prose); font-size: 15px; }
+  .tbl-wrap { overflow-x: auto; }
+
+  .swatch { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .swatch i { width: 8px; height: 8px; border-radius: 50%; display: block; }
+
+  ul.notes { list-style: none; display: flex; flex-direction: column; gap: 11px; }
+  ul.notes li {
+    font-family: var(--prose);
+    font-size: 16px;
+    color: var(--ink-2);
+    padding-left: 20px;
+    position: relative;
+    max-width: 66ch;
+  }
+  ul.notes li::before {
+    content: "";
+    position: absolute; left: 2px; top: 10px;
+    width: 6px; height: 1px; background: var(--accent);
+  }
+  ul.notes li b { color: var(--ink); font-family: var(--mono); font-size: 13.5px; font-weight: 400; }
+
+  code {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    padding: 1px 5px;
+    color: var(--ink);
+  }
+
+  footer {
+    border-top: 1px solid var(--rule);
+    padding-top: 20px;
+    font-size: 12px;
+    color: var(--ink-3);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+  }
+
+  svg { display: block; }
+</style>
+
+<div class="wrap">
+
+  <!-- ============================================================ header -->
+  <header class="masthead">
+    <div class="eyebrow">Omarchy <b>4 · Quattro</b> — Quickshell bar plugin — mockup</div>
+    <h1>prox<span>marchy</span></h1>
+    <p class="lede">
+      A read-only Proxmox VE panel that hangs off the Omarchy bar. It answers
+      <em>what is running, what died, and how hard is it working</em> — then gets out of
+      the way. Nothing in the panel starts, stops, migrates or reconfigures a guest;
+      the only thing it opens is a window you were going to open anyway.
+    </p>
+    <div class="facts">
+      <span class="fact hot">read-only</span>
+      <span class="fact">bar-widget</span>
+      <span class="fact">pve api /nodes</span>
+      <span class="fact">lxc + qemu</span>
+      <span class="fact">fabricated data</span>
+    </div>
+  </header>
+
+  <!-- ============================================================ panels -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">The panel</div>
+      <h2>One list, then one guest</h2>
+      <p>
+        The bar icon carries the running count and turns amber when something needs looking at.
+        Click it and the panel drops: every container and VM on the cluster, each with a status LED
+        and a console button on its left edge. Press a guest and the panel becomes that guest.
+      </p>
+    </div>
+
+    <div class="stage">
+
+      <!-- the bar -->
+      <div class="bar">
+        <div class="left">
+          <span class="ws"><i class="on"></i><i></i><i></i><i></i></span>
+          <span class="d">nginx-proxy — pct enter</span>
+        </div>
+        <span class="bar-item active">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M8 1.6 14 4.6 8 7.6 2 4.6 8 1.6Z" stroke="#e57000" stroke-width="1.1" stroke-linejoin="round"/>
+            <path d="M2 8 8 11 14 8" stroke="#e57000" stroke-width="1.1" stroke-linejoin="round" opacity=".8"/>
+            <path d="M2 11.4 8 14.4 14 11.4" stroke="#e57000" stroke-width="1.1" stroke-linejoin="round" opacity=".5"/>
+          </svg>
+          <span class="bar-count">9</span>
+        </span>
+        <span class="bar-item">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 11c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="1.2"/>
+          </svg>
+        </span>
+        <span class="bar-item">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <rect x="2" y="5" width="11" height="6" rx="1.4" stroke="currentColor" stroke-width="1.2"/>
+            <path d="M14 7.5v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="bar-item">13:42</span>
+      </div>
+
+      <!-- three panel states -->
+      <div class="panels">
+
+        <!-- ---------------------------------------------- overview -->
+        <article class="panel" aria-label="Overview panel">
+          <div class="hero">
+            <span class="mark">
+              <svg width="20" height="20" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M8 1.6 14 4.6 8 7.6 2 4.6 8 1.6Z" stroke="#c6ced6" stroke-width="1.1" stroke-linejoin="round"/>
+                <path d="M2 8 8 11 14 8" stroke="#c6ced6" stroke-width="1.1" stroke-linejoin="round" opacity=".75"/>
+                <path d="M2 11.4 8 14.4 14 11.4" stroke="#c6ced6" stroke-width="1.1" stroke-linejoin="round" opacity=".45"/>
+              </svg>
+            </span>
+            <span class="txt">
+              <span class="title">homelab</span>
+              <span class="meta">9 up &nbsp;·&nbsp; 2 down &nbsp;·&nbsp; 1 paused</span>
+            </span>
+            <span class="badge warn">2 ALERTS</span>
+          </div>
+
+          <div class="shead">Needs attention</div>
+          <div class="rows">
+            <div class="row alarm">
+              <span class="tbtn" aria-hidden="true">
+                <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+                  <path d="M3 4.2 5.8 7 3 9.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M7.6 10h3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="led crit"></span>
+              <span class="vmid">204</span>
+              <span class="name"><b>truenas</b><small>io delay 18% &nbsp;·&nbsp; 12 min</small></span>
+              <span class="trail">pve02</span>
+            </div>
+            <div class="row dimmed">
+              <span class="tbtn off" aria-hidden="true">
+                <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+                  <path d="M3 4.2 5.8 7 3 9.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M7.6 10h3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="led stop"></span>
+              <span class="vmid">105</span>
+              <span class="name"><b>gitea</b><small>stopped &nbsp;·&nbsp; autostart on</small></span>
+              <span class="trail">pve01</span>
+            </div>
+          </div>
+
+          <div class="rule"></div>
+          <div class="shead">Nodes</div>
+          <div class="rows">
+            <div class="stat">
+              <div class="line"><b>pve01</b><span class="mute">12 cores &nbsp;·&nbsp; up 41d</span></div>
+              <div class="mrow"><em>cpu</em><div class="meter"><i style="width:22%"></i></div><span>22%</span></div>
+              <div class="mrow"><em>mem</em><div class="meter"><i style="width:38%"></i></div><span>24.6/64G</span></div>
+            </div>
+            <div class="stat">
+              <div class="line"><b>pve02</b><span class="mute">8 cores &nbsp;·&nbsp; up 41d</span></div>
+              <div class="mrow"><em>cpu</em><div class="meter"><i style="width:41%"></i></div><span>41%</span></div>
+              <div class="mrow"><em>mem</em><div class="meter"><i class="warn" style="width:87%"></i></div><span>27.9/32G</span></div>
+            </div>
+          </div>
+
+          <div class="rule"></div>
+          <div class="shead">Containers &nbsp;·&nbsp; 6</div>
+          <div class="rows">
+            <div class="row cursor">
+              <span class="tbtn" title="pct enter 101">
+                <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+                  <path d="M3 4.2 5.8 7 3 9.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M7.6 10h3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="led run"></span>
+              <span class="vmid">101</span>
+              <span class="name"><b>nginx-proxy</b><small>debian 12 &nbsp;·&nbsp; 12d</small></span>
+              <span class="trail">4.2% · 412M</span>
+            </div>
+            <div class="row">
+              <span class="tbtn">
+                <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+                  <path d="M3 4.2 5.8 7 3 9.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M7.6 10h3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="led run"></span>
+              <span class="vmid">102</span>
+              <span class="name"><b>pihole</b><small>debian 12 &nbsp;·&nbsp; 41d</small></span>
+              <span class="trail">1.1% · 196M</span>
+            </div>
+            <div class="row">
+              <span class="tbtn">
+                <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+                  <path d="M3 4.2 5.8 7 3 9.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M7.6 10h3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="led run"></span>
+              <span class="vmid">103</span>
+              <span class="name"><b>jellyfin</b><small>ubuntu 24.04 &nbsp;·&nbsp; 8d</small></span>
+              <span class="trail">38% · 2.1G</span>
+            </div>
+            <div class="row">
+              <span class="tbtn">
+                <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+                  <path d="M3 4.2 5.8 7 3 9.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M7.6 10h3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="led run"></span>
+              <span class="vmid">104</span>
+              <span class="name"><b>postgres</b><small>debian 12 &nbsp;·&nbsp; 41d</small></span>
+              <span class="trail">6.8% · 1.4G</span>
+            </div>
+            <div class="row dimmed">
+              <span class="tbtn off">
+                <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+                  <path d="M3 4.2 5.8 7 3 9.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M7.6 10h3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="led stop"></span>
+              <span class="vmid">105</span>
+              <span class="name"><b>gitea</b><small>stopped</small></span>
+              <span class="trail">—</span>
+            </div>
+            <div class="row">
+              <span class="tbtn">
+                <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+                  <path d="M3 4.2 5.8 7 3 9.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M7.6 10h3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="led run"></span>
+              <span class="vmid">110</span>
+              <span class="name"><b>wireguard</b><small>alpine 3.20 &nbsp;·&nbsp; 41d</small></span>
+              <span class="trail">0.2% · 64M</span>
+            </div>
+          </div>
+
+          <div class="rule"></div>
+          <div class="shead">Virtual machines &nbsp;·&nbsp; 6</div>
+          <div class="rows">
+            <div class="row">
+              <span class="tbtn">
+                <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+                  <path d="M3 4.2 5.8 7 3 9.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M7.6 10h3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="led run"></span>
+              <span class="vmid">201</span>
+              <span class="name"><b>docker-host</b><small>debian 12 &nbsp;·&nbsp; agent ok</small></span>
+              <span class="trail">14% · 6.0G</span>
+            </div>
+            <div class="row hovered">
+              <span class="tbtn rdp" title="xfreerdp3 /v:10.0.20.42">
+                <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+                  <rect x="1.6" y="2.4" width="10.8" height="7.4" rx="1.1" stroke="currentColor" stroke-width="1.2"/>
+                  <path d="M5.2 12h3.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="led run"></span>
+              <span class="vmid">202</span>
+              <span class="name"><b>win-srv-2022</b><small>windows &nbsp;·&nbsp; rdp :3389</small></span>
+              <span class="trail">11.8% · 6.1G</span>
+            </div>
+            <div class="row">
+              <span class="tbtn">
+                <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+                  <path d="M3 4.2 5.8 7 3 9.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M7.6 10h3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="led run"></span>
+              <span class="vmid">203</span>
+              <span class="name"><b>home-assistant</b><small>haos 13 &nbsp;·&nbsp; agent ok</small></span>
+              <span class="trail">9.4% · 2.8G</span>
+            </div>
+            <div class="row alarm">
+              <span class="tbtn">
+                <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+                  <path d="M3 4.2 5.8 7 3 9.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M7.6 10h3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="led crit"></span>
+              <span class="vmid">204</span>
+              <span class="name"><b>truenas</b><small>io delay 18%</small></span>
+              <span class="trail">5.1% · 12.0G</span>
+            </div>
+            <div class="row dimmed">
+              <span class="tbtn rdp off">
+                <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+                  <rect x="1.6" y="2.4" width="10.8" height="7.4" rx="1.1" stroke="currentColor" stroke-width="1.2"/>
+                  <path d="M5.2 12h3.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="led stop"></span>
+              <span class="vmid">205</span>
+              <span class="name"><b>win11-lab</b><small>stopped</small></span>
+              <span class="trail">—</span>
+            </div>
+            <div class="row">
+              <span class="tbtn">
+                <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+                  <path d="M3 4.2 5.8 7 3 9.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M7.6 10h3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="led pause"></span>
+              <span class="vmid">206</span>
+              <span class="name"><b>opnsense</b><small>paused &nbsp;·&nbsp; 3h</small></span>
+              <span class="trail">— · 2.0G</span>
+            </div>
+          </div>
+
+          <div class="legend">j/k move &nbsp; ⏎ stats &nbsp; t console &nbsp; / search &nbsp; r refresh</div>
+        </article>
+
+        <!-- ---------------------------------------------- LXC detail -->
+        <article class="panel" aria-label="Container detail panel">
+          <div class="hero">
+            <span class="mark">
+              <svg width="20" height="20" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <rect x="2" y="4.2" width="12" height="8" rx="1.3" stroke="#c6ced6" stroke-width="1.1"/>
+                <path d="M2 7h12" stroke="#c6ced6" stroke-width="1.1" opacity=".55"/>
+                <path d="M4.4 9.6h2.2" stroke="#c6ced6" stroke-width="1.1" stroke-linecap="round" opacity=".55"/>
+              </svg>
+            </span>
+            <span class="txt">
+              <span class="title">nginx-proxy</span>
+              <span class="meta">LXC 101 &nbsp;·&nbsp; pve01 &nbsp;·&nbsp; h to go back</span>
+            </span>
+            <span class="badge run">RUNNING</span>
+          </div>
+
+          <div class="shead">Resources</div>
+          <div class="rows">
+            <div class="stat">
+              <div class="line"><b>CPU</b><span>4.2%</span></div>
+              <div class="meter"><i style="width:4.2%"></i></div>
+              <div class="sub">2 cores &nbsp;·&nbsp; load 0.08</div>
+            </div>
+            <div class="stat">
+              <div class="line"><b>Memory</b><span>40%</span></div>
+              <div class="meter"><i style="width:40%"></i></div>
+              <div class="sub">412 MB / 1.0 GB</div>
+            </div>
+            <div class="stat">
+              <div class="line"><b>Swap</b><span>0%</span></div>
+              <div class="meter"><i style="width:1%"></i></div>
+              <div class="sub">0 B / 512 MB</div>
+            </div>
+            <div class="stat">
+              <div class="line"><b>Rootfs</b><span>39%</span></div>
+              <div class="meter"><i style="width:39%"></i></div>
+              <div class="sub">3.1 GB / 8.0 GB &nbsp;·&nbsp; local-lvm</div>
+            </div>
+          </div>
+
+          <div class="rule"></div>
+          <div class="shead">Traffic &nbsp;·&nbsp; since boot</div>
+          <div class="rows">
+            <div class="kv"><b>Network</b><span>↓ 1.2 GB &nbsp;·&nbsp; ↑ 380 MB</span></div>
+            <div class="kv"><b>Now</b><span class="mute">↓ 42 KB/s &nbsp;·&nbsp; ↑ 8 KB/s</span></div>
+            <div class="kv"><b>Disk I/O</b><span class="mute">r 84 MB &nbsp;·&nbsp; w 1.4 GB</span></div>
+          </div>
+
+          <div class="rule"></div>
+          <div class="shead">Guest</div>
+          <div class="rows">
+            <div class="kv"><b>Uptime</b><span>12d 4h 51m</span></div>
+            <div class="kv"><b>Address</b><span>10.0.20.11/24</span></div>
+            <div class="kv"><b>Type</b><span class="mute">unprivileged &nbsp;·&nbsp; nesting</span></div>
+            <div class="kv"><b>Boot</b><span class="mute">autostart &nbsp;·&nbsp; order 2</span></div>
+            <div class="kv"><b>Backup</b><span class="ok">ok &nbsp;·&nbsp; 6h ago &nbsp;·&nbsp; pbs01</span></div>
+          </div>
+
+          <div class="legend">t opens <span style="color:var(--fg)">pct enter 101</span> in a floating terminal<br>h back &nbsp; ⏎ web UI &nbsp; c copy vmid &nbsp; r refresh</div>
+        </article>
+
+        <!-- ---------------------------------------------- VM detail -->
+        <article class="panel" aria-label="Virtual machine detail panel">
+          <div class="hero">
+            <span class="mark">
+              <svg width="20" height="20" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <rect x="2.4" y="2" width="11.2" height="12" rx="1.3" stroke="#c6ced6" stroke-width="1.1"/>
+                <path d="M4.8 4.6h6.4M4.8 7h6.4M4.8 9.4h3.4" stroke="#c6ced6" stroke-width="1.1" stroke-linecap="round" opacity=".55"/>
+              </svg>
+            </span>
+            <span class="txt">
+              <span class="title">win-srv-2022</span>
+              <span class="meta">QEMU 202 &nbsp;·&nbsp; pve01 &nbsp;·&nbsp; h to go back</span>
+            </span>
+            <span class="badge run">RUNNING</span>
+          </div>
+
+          <div class="shead">Resources</div>
+          <div class="rows">
+            <div class="stat">
+              <div class="line"><b>CPU</b><span>11.8%</span></div>
+              <div class="meter"><i style="width:11.8%"></i></div>
+              <div class="sub">4 vcpu &nbsp;·&nbsp; host &nbsp;·&nbsp; 1 socket</div>
+            </div>
+            <div class="stat">
+              <div class="line"><b>Memory</b><span>76%</span></div>
+              <div class="meter"><i class="warn" style="width:76%"></i></div>
+              <div class="sub">6.1 GB / 8.0 GB &nbsp;·&nbsp; balloon on</div>
+            </div>
+            <div class="stat">
+              <div class="line"><b>scsi0</b><span>62%</span></div>
+              <div class="meter"><i style="width:62%"></i></div>
+              <div class="sub">74 GB / 120 GB &nbsp;·&nbsp; local-zfs</div>
+            </div>
+            <div class="stat">
+              <div class="line"><b>Host share</b><span>4%</span></div>
+              <div class="meter"><i style="width:4%"></i></div>
+              <div class="sub">0.47 of 12 cores on pve01</div>
+            </div>
+          </div>
+
+          <div class="rule"></div>
+          <div class="shead">Traffic &nbsp;·&nbsp; since boot</div>
+          <div class="rows">
+            <div class="kv"><b>Network</b><span>↓ 44 GB &nbsp;·&nbsp; ↑ 9.6 GB</span></div>
+            <div class="kv"><b>Now</b><span class="mute">↓ 1.1 MB/s &nbsp;·&nbsp; ↑ 210 KB/s</span></div>
+            <div class="kv"><b>Disk I/O</b><span class="mute">r 12 GB &nbsp;·&nbsp; w 31 GB</span></div>
+          </div>
+
+          <div class="rule"></div>
+          <div class="shead">Guest</div>
+          <div class="rows">
+            <div class="kv"><b>Uptime</b><span>6d 11h 02m</span></div>
+            <div class="kv"><b>OS</b><span>Windows Server 2022</span></div>
+            <div class="kv"><b>Address</b><span>10.0.20.42/24</span></div>
+            <div class="kv"><b>Agent</b><span class="ok">qemu-guest-agent 108.0.1</span></div>
+            <div class="kv"><b>Console</b><span style="color:#6aa6d8">rdp :3389</span></div>
+            <div class="kv"><b>Backup</b><span class="ok">ok &nbsp;·&nbsp; 6h ago &nbsp;·&nbsp; pbs01</span></div>
+          </div>
+
+          <div class="legend">t opens <span style="color:#6aa6d8">xfreerdp3 /v:10.0.20.42</span><br>h back &nbsp; ⏎ web UI &nbsp; c copy address &nbsp; r refresh</div>
+        </article>
+
+      </div>
+
+      <div class="popups">
+        <!-- terminal pop-out -->
+        <div class="win focused">
+          <div class="win-bar">
+            <span class="dot"></span>
+            <span>pct enter 101 — nginx-proxy — floating</span>
+          </div>
+          <div class="win-body">
+            <div><span class="d">dr@omarchy</span> ~ <span class="p">❯</span> ssh -t root@pve01 pct enter 101</div>
+            <div class="d">&nbsp;</div>
+            <div><span class="c">root@nginx-proxy</span>:<span class="d">~</span># systemctl is-active nginx</div>
+            <div class="p">active</div>
+            <div><span class="c">root@nginx-proxy</span>:<span class="d">~</span># <span class="caret"></span></div>
+          </div>
+        </div>
+
+        <!-- rdp pop-out -->
+        <div class="win">
+          <div class="win-bar">
+            <span class="dot"></span>
+            <span>xfreerdp3 /v:10.0.20.42 — win-srv-2022</span>
+          </div>
+          <div class="win-body rdp-body">
+            <div class="rdp-note">
+              remote session<br>
+              <span style="opacity:.7">10.0.20.42:3389 &nbsp;·&nbsp; /dynamic-resolution /clipboard</span>
+            </div>
+            <div class="rdp-task">
+              <span style="color:#6aa6d8">⊞</span>
+              <span>win-srv-2022</span>
+              <span style="margin-left:auto">13:42</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding:0 24px">
+        <div class="cap">
+          <b>Left column, every row.</b> The console button is the only actuator in the plugin —
+          it spawns a window, it does not touch the guest. Linux gets a terminal, Windows gets
+          <b>xfreerdp3</b>, a stopped guest gets a dimmed button that does nothing.
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============================================================ reading -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">Encoding</div>
+      <h2>What the LED and the button mean</h2>
+    </div>
+
+    <div class="grid2">
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr><th>LED</th><th>State</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="k"><span class="swatch"><i style="background:#5cc46b;box-shadow:0 0 6px rgba(92,196,107,.75)"></i> filled, lit</span></td>
+              <td class="v">running — status <code>running</code>, no alarm</td>
+            </tr>
+            <tr>
+              <td class="k"><span class="swatch"><i style="background:transparent;box-shadow:inset 0 0 0 1.5px #4a545e"></i> hollow</span></td>
+              <td class="v">stopped. The row dims, the trailing figures collapse to an em dash</td>
+            </tr>
+            <tr>
+              <td class="k"><span class="swatch"><i style="background:#e0a33e;box-shadow:0 0 6px rgba(224,163,62,.55)"></i> amber</span></td>
+              <td class="v">paused or suspended — memory still held, CPU idle</td>
+            </tr>
+            <tr>
+              <td class="k"><span class="swatch"><i style="background:#e0524e;box-shadow:0 0 7px rgba(224,82,78,.8)"></i> red</span></td>
+              <td class="v">running but unhappy: high IO delay, failed backup, autostart guest that is down</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr><th>Console button</th><th>Opens</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="k">LXC</td><td class="v"><code>pct enter &lt;vmid&gt;</code> on the guest's node</td></tr>
+            <tr><td class="k">VM, Linux</td><td class="v">SSH to the agent-reported address, falling back to <code>qm terminal</code></td></tr>
+            <tr><td class="k">VM, Windows</td><td class="v"><code>xfreerdp3</code> against the agent-reported address</td></tr>
+            <tr><td class="k">Stopped</td><td class="v">dimmed and inert — the plugin will not start a guest to give you a shell</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ notes -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">Shape of it</div>
+      <h2>Notes for the build</h2>
+    </div>
+
+    <div class="grid2">
+      <ul class="notes">
+        <li><b>Same skeleton as the Cloudflare widget.</b> <code>manifest.json</code>, <code>Panel.qml</code>, <code>Service.qml</code>, plus <code>Api.js</code> and <code>Model.js</code> — one flat row model over one <code>ListView</code>, cursor as a single index.</li>
+        <li><b>Overview first, guest second.</b> Same drill-down as Cloudflare: <code>l</code> or Enter descends, <code>h</code> or Escape comes back and restores the cursor. A cluster of thirty guests should not open as thirty rows of noise.</li>
+        <li><b>Needs attention is absent when nothing is wrong,</b> so its presence is the signal. Alerts name the guest, because a count of broken things is not actionable.</li>
+        <li><b>Two polls.</b> <code>/cluster/resources</code> every 10s for the list and the LEDs; per-guest <code>/status/current</code> only for the guest on screen, so the panel is cheap when it is closed.</li>
+      </ul>
+
+      <ul class="notes">
+        <li><b>Auth is an API token,</b> <code>PVEAPIToken=user@pve!omarchy=…</code>, with <code>VM.Audit</code>, <code>Sys.Audit</code> and <code>Datastore.Audit</code> only. A token that cannot stop a VM cannot stop a VM by accident. Written to curl's stdin as a config file, never into argv.</li>
+        <li><b>The read-only boundary is the point.</b> No start, stop, reboot, migrate, snapshot or config write — Proxmox's own web UI is better at all of those, and it is one keypress away on Enter.</li>
+        <li><b>Console commands live in settings,</b> not in code, so the terminal, the SSH user and the <code>xfreerdp3</code> flags are yours to set per install.</li>
+        <li><b>Everything above is fabricated.</b> Hostnames, addresses and figures are invented for the mockup; no real cluster was read.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    <span>omaprox — mockup, not an implementation</span>
+    <span>Omarchy 4.0.0 · Quickshell bar-widget</span>
+    <span>layout after meirdick/omarchy-cloudflare</span>
+  </footer>
+
+</div>
