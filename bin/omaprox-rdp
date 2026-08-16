@@ -35,23 +35,52 @@ HAVE_KEYRING=0
 command -v secret-tool >/dev/null 2>&1 && HAVE_KEYRING=1
 
 SCHEMA=(service omaprox host "$ADDRESS")
+# The plugin was first published as "proxmarchy", so a credential saved before
+# the rename lives under that service name. Look both up; anything found in the
+# old one is migrated over on success so the rename never orphans it.
+LEGACY_SCHEMA=(service proxmarchy host "$ADDRESS")
 
 # `secret-tool search` splits its output: label and secret to stdout, the
 # attributes to stderr. Discarding stderr loses the very fields being read;
 # discarding stdout is what we want, since it keeps the password out of the pipe.
 attribute() {
   ((HAVE_KEYRING)) || return 1
-  secret-tool search "${SCHEMA[@]}" 2>&1 >/dev/null |
-    sed -n "s/^ *attribute\.$1 = //p" | head -1
+  local v
+  v=$(secret-tool search "${SCHEMA[@]}" 2>&1 >/dev/null |
+    sed -n "s/^ *attribute\.$1 = //p" | head -1)
+  if [[ -n $v ]]; then printf '%s' "$v"; return 0; fi
+  v=$(secret-tool search "${LEGACY_SCHEMA[@]}" 2>&1 >/dev/null |
+    sed -n "s/^ *attribute\.$1 = //p" | head -1)
+  [[ -n $v ]] && printf '%s' "$v"
+  [[ -n $v ]]
 }
 
-lookup_password() { ((HAVE_KEYRING)) && secret-tool lookup "${SCHEMA[@]}" 2>/dev/null; }
-forget()          { ((HAVE_KEYRING)) && secret-tool clear "${SCHEMA[@]}" 2>/dev/null; return 0; }
+lookup_password() {
+  ((HAVE_KEYRING)) || return 1
+  local p
+  p=$(secret-tool lookup "${SCHEMA[@]}" 2>/dev/null)
+  [[ -n $p ]] || p=$(secret-tool lookup "${LEGACY_SCHEMA[@]}" 2>/dev/null)
+  [[ -n $p ]] || return 1
+  printf '%s' "$p"
+}
+
+forget() {
+  ((HAVE_KEYRING)) || return 0
+  secret-tool clear "${SCHEMA[@]}" 2>/dev/null
+  secret-tool clear "${LEGACY_SCHEMA[@]}" 2>/dev/null
+  return 0
+}
 
 remember() {
   ((HAVE_KEYRING)) || return 0
-  printf '%s' "$3" | secret-tool store --label="Omaprox — $LABEL" \
-    "${SCHEMA[@]}" username "$1" domain "$2" 2>/dev/null
+  if printf '%s' "$3" | secret-tool store --label="Omaprox — $LABEL" \
+      "${SCHEMA[@]}" username "$1" domain "$2" 2>/dev/null; then
+    # One canonical copy under the current name; drop the pre-rename one if it
+    # is still there.
+    secret-tool clear "${LEGACY_SCHEMA[@]}" 2>/dev/null
+    return 0
+  fi
+  return 1
 }
 
 # One argument per line, to be piped into /args-from:stdin.
@@ -159,7 +188,7 @@ if [[ ! -t 0 ]]; then
     DOMAIN=$(attribute domain) || DOMAIN=""
     launch_watched "$USERNAME" "$PASSWORD" "$DOMAIN"
     case $? in
-      0) exit 0 ;;          # connected — nothing was ever on screen but the desktop
+      0) remember "$USERNAME" "$DOMAIN" "$PASSWORD"; exit 0 ;; # connected, migrate any legacy entry
       2) ;;                 # host down — fall through so the terminal says so
       *) forget ;;          # refused — stop trying them and ask again
     esac
@@ -194,6 +223,16 @@ for attempt in 1 2 3; do
       ;;
     2)
       echo "cannot reach $ADDRESS"
+      if [[ $ADDRESS != *.* && $ADDRESS != *:* ]]; then
+        # A bare name means the panel had no real address and fell back to the
+        # guest's name. That is almost always a missing address override, not a
+        # broken network.
+        echo
+        echo "  $ADDRESS does not resolve. If the guest has a fixed IP, give the"
+        echo "  panel an address override in ~/.config/omarchy/shell.json:"
+        echo '    { "id": "io.github.andressm415.omaprox", "addresses": { "<vmid>": "<ip>" } }'
+        echo "  (README → Configure)."
+      fi
       echo
       read -rp "  press enter to close "
       exit 1
