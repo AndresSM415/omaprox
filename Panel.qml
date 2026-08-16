@@ -112,6 +112,13 @@ Panel {
       kind: "note", key: "setup-perms", selectable: false,
       name: "The token needs only VM.Audit, Sys.Audit and Datastore.Audit — the stock PVEAuditor role. A token that cannot stop a guest cannot stop one by accident."
     })
+    // Selectable on purpose: Enter or a click opens the full guide, so the
+    // panel can stay the short version of the instructions.
+    steps.push({
+      kind: "note", key: "setup-readme",
+      name: "Full setup guide in the README — github.com/AndresSM415/omaprox",
+      link: "https://github.com/AndresSM415/omaprox"
+    })
 
     var rows = []
     for (var i = 0; i < steps.length; i++) {
@@ -236,7 +243,10 @@ Panel {
   function activateCursor() {
     var row = currentRow
     if (!row) return
-    if (row.kind === "note") return
+    if (row.kind === "note") {
+      if (row.link) pve.openUrl(row.link)
+      return
+    }
     if (row.kind === "guest" && row.guest && !inGuest) { enterCurrent(); return }
     if (row.kind === "guest" && row.vtype === "node") { pve.openNodeWebUi(row.node); close(); return }
     if (row.kind === "node") { pve.openNodeWebUi(row.name); close(); return }
@@ -1023,10 +1033,15 @@ Panel {
     }
   }
 
-  component NoteRow: Item {
+  component NoteRow: CursorSurface {
     id: note
     property var row: null
     property int rowIndex: -1
+
+    hasCursor: root.cursorActive && root.cursorIndex === rowIndex
+    foreground: root.foreground
+    fill: root.hoverFill
+    currentFill: root.selectedFill
     implicitHeight: noteText.implicitHeight + Style.spacing.lg
 
     Text {
@@ -1041,6 +1056,17 @@ Panel {
       font.family: root.fontFamily
       font.pixelSize: Style.font.bodySmall
       wrapMode: Text.WordWrap
+    }
+
+    MouseArea {
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: note.row && note.row.link ? Qt.PointingHandCursor : Qt.ArrowCursor
+      onEntered: root.setCursor(note.rowIndex)
+      onClicked: {
+        root.setCursor(note.rowIndex)
+        if (note.row && note.row.link) pve.openUrl(note.row.link)
+      }
     }
   }
 
