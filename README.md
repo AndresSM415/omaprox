@@ -44,6 +44,7 @@ are done the panel shows exactly which one is missing.
 - *Datacenter → Permissions → Permissions → Add → API Token Permission*:
   Path `/`, the token you just created, role `PVEAuditor`, *Propagate*
   ticked.
+
   ![Granting the token the PVEAuditor role](docs/media/set-token-permission.png)
 
 `PVEAuditor` is read-only and covers exactly what Omaprox needs. A token
