@@ -40,9 +40,11 @@ are done the panel shows exactly which one is missing.
 - *Datacenter → Permissions → API Tokens → Add* creates the token: user,
   token ID, and *Privilege Separation* ticked. There is no role picker on
   this screen — a fresh token can do nothing yet.
+  ![Proxmox API token creation dialog](docs/media/add-token.png)
 - *Datacenter → Permissions → Permissions → Add → API Token Permission*:
   Path `/`, the token you just created, role `PVEAuditor`, *Propagate*
   ticked.
+  ![Granting the token the PVEAuditor role](docs/media/set-token-permission.png)
 
 `PVEAuditor` is read-only and covers exactly what Omaprox needs. A token
 that cannot stop a VM cannot stop a VM by accident — that is the point.
