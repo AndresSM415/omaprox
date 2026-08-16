@@ -1038,7 +1038,12 @@ Panel {
     property var row: null
     property int rowIndex: -1
 
+    readonly property bool isLink: !!(note.row && note.row.link)
+
     hasCursor: root.cursorActive && root.cursorIndex === rowIndex
+    // Link notes are always painted selected — a permanent affordance that
+    // the row is actionable, with no dependence on hover or cursor state.
+    current: note.isLink
     foreground: root.foreground
     fill: root.hoverFill
     currentFill: root.selectedFill
@@ -1052,7 +1057,7 @@ Panel {
       anchors.leftMargin: Style.space(8)
       anchors.rightMargin: Style.space(8)
       text: note.row ? String(note.row.name || "") : ""
-      color: root.dim
+      color: note.isLink ? root.foreground : root.dim
       font.family: root.fontFamily
       font.pixelSize: Style.font.bodySmall
       wrapMode: Text.WordWrap
@@ -1061,11 +1066,11 @@ Panel {
     MouseArea {
       anchors.fill: parent
       hoverEnabled: true
-      cursorShape: note.row && note.row.link ? Qt.PointingHandCursor : Qt.ArrowCursor
+      cursorShape: note.isLink ? Qt.PointingHandCursor : Qt.ArrowCursor
       onEntered: root.setCursor(note.rowIndex)
       onClicked: {
         root.setCursor(note.rowIndex)
-        if (note.row && note.row.link) pve.openUrl(note.row.link)
+        if (note.isLink) pve.openUrl(note.row.link)
       }
     }
   }
