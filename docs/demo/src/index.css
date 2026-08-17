@@ -854,6 +854,31 @@ footer a:hover {
   gap: 18px;
 }
 
+.masthead-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.repo-link {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 4px 9px;
+  text-decoration: none;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+.repo-link:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 @media (max-width: 640px) {
   .masthead-top {
     flex-direction: column;

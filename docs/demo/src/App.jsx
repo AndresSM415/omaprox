@@ -565,9 +565,14 @@ export default function App() {
           <div className="eyebrow">
             Omarchy <b>4 · Quattro</b> — Quickshell bar plugin
           </div>
-          <button className="theme-btn" onClick={cycle} aria-label="Toggle theme">
-            {theme === "auto" ? "theme: auto" : `theme: ${theme}`}
-          </button>
+          <div className="masthead-actions">
+            <a className="repo-link" href="https://github.com/AndresSM415/omaprox">
+              github ↗
+            </a>
+            <button className="theme-btn" onClick={cycle} aria-label="Toggle theme">
+              {theme === "auto" ? "theme: auto" : `theme: ${theme}`}
+            </button>
+          </div>
         </div>
         <h1>
           oma<span>prox</span>
