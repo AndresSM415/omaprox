@@ -10,9 +10,9 @@
 # session is up, rather than sitting behind the desktop for the rest of it.
 #
 # Credentials live in the login keyring via libsecret, never in shell.json and
-# never on the command line: FreeRDP is handed its arguments on a pipe with
-# /args-from, because /proc/<pid>/cmdline is world-readable and a /p: argument
-# would show the password to every process on the machine.
+# never on the command line: FreeRDP is handed its arguments with /args-from
+# reading a 0600 file, because /proc/<pid>/cmdline is world-readable and a /p:
+# argument would show the password to every process on the machine.
 
 set -uo pipefail
 
@@ -135,16 +135,26 @@ REFUSED_RE="ERRCONNECT_(LOGON_FAILURE|ACCOUNT_[A-Z_]+|PASSWORD_[A-Z_]+|ACCESS_DE
 launch_watched() {
   reachable || return 2
 
-  local log args waited=0
-  log=$(mktemp) || return 2
-  args=$(emit_args "$1" "$2" "$3")
+  local tmpbase=${XDG_RUNTIME_DIR:-/tmp}
+  local log args_file waited=0
+  log=$(mktemp "$tmpbase/omaprox-rdp.log.XXXXXX") || return 2
+  args_file=$(mktemp "$tmpbase/omaprox-rdp.args.XXXXXX") || { rm -f "$log"; return 2; }
+
+  # The args — password included — never touch a process command line. They are
+  # written to a 0600 file by the shell builtin (no child process, so nothing
+  # shows up in /proc/<pid>/cmdline), FreeRDP reads them back from that file
+  # through /args-from:stdin, and the name is unlinked the moment the descriptor
+  # is open, so the secret spends as little time on disk as it takes FreeRDP to
+  # consume it.
+  emit_args "$1" "$2" "$3" >"$args_file"
 
   # setsid so the session survives this script and the terminal that ran it.
-  setsid bash -c 'printf "%s\n" "$1" | xfreerdp3 /args-from:stdin' _ "$args" >"$log" 2>&1 &
+  setsid bash -c 'exec 0<"$1"; rm -f "$1"; xfreerdp3 /args-from:stdin >"$2" 2>&1' \
+    _ "$args_file" "$log" &
 
   while ((waited < 24)); do
     if grep -qE "$REFUSED_RE" "$log" 2>/dev/null; then
-      rm -f "$log"
+      rm -f "$log" "$args_file"
       return 1
     fi
     sleep 0.25
@@ -153,7 +163,7 @@ launch_watched() {
 
   # The log is dropped, not read further: the session owns the descriptor and
   # keeps writing to it for as long as it runs.
-  rm -f "$log"
+  rm -f "$log" "$args_file"
   return 0
 }
 
