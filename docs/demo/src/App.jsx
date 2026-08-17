@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import DemoBar from "./Bar.jsx";
+import THEMES from "./themes.js";
 
 const INSTALL_CMD =
   "omarchy plugin add https://github.com/AndresSM415/omaprox.git --enable";
@@ -326,9 +327,9 @@ function VmPanel() {
   );
 }
 
-function Stage({ palette }) {
+function Stage() {
   return (
-    <div className="stage" data-palette={palette}>
+    <div className="stage">
       <DemoBar />
 
       <div className="panels">
@@ -515,6 +516,118 @@ function InstallBlock() {
   );
 }
 
+/* ------------------------------------------------------- theme carousel */
+
+// The plugin reads a theme's colors.toml and derives the rest with the same
+// arithmetic Qt applies: dim = fg / 1.55, faint = fg / 2.2, and alpha tracks
+// over the foreground. Repeating that here keeps the demo honest.
+function hexToRgb(hex) {
+  const h = String(hex).replace("#", "");
+  const n = parseInt(h.length === 3 ? h.split("").map((c) => c + c).join("") : h, 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+function paletteVars(t) {
+  const fg = t.fg;
+  const scale = (c, f) => {
+    const { r, g, b } = hexToRgb(c);
+    return `rgb(${Math.round(r / f)}, ${Math.round(g / f)}, ${Math.round(b / f)})`;
+  };
+  const alpha = (c, a) => {
+    const { r, g, b } = hexToRgb(c);
+    return `rgba(${r}, ${g}, ${b}, ${a})`;
+  };
+  return {
+    "--panel-bg": t.bg,
+    "--panel-bg-2": t.bg2,
+    "--accent": t.accent,
+    "--panel-edge": alpha(t.accent, 0.55),
+    "--fg": fg,
+    "--fg-dim": scale(fg, 1.55),
+    "--fg-faint": scale(fg, 2.2),
+    "--track": alpha(fg, 0.14),
+    "--sel": alpha(fg, 0.07),
+    "--sel-edge": alpha(fg, 0.22),
+    "--crit": t.red,
+  };
+}
+
+function ThemeCarousel() {
+  const trackRef = useRef(null);
+  const drag = useRef(null);
+  const [index, setIndex] = useState(0);
+
+  const slideStep = () => {
+    const el = trackRef.current;
+    const slide = el && el.firstElementChild;
+    return slide ? slide.getBoundingClientRect().width + 18 : 1;
+  };
+
+  const onScroll = () => {
+    const el = trackRef.current;
+    if (!el) return;
+    const n = Math.round(el.scrollLeft / slideStep());
+    setIndex(Math.min(THEMES.length - 1, Math.max(0, n)));
+  };
+
+  const nudge = (dir) =>
+    trackRef.current &&
+    trackRef.current.scrollBy({ left: dir * slideStep(), behavior: "smooth" });
+
+  const onPointerDown = (e) => {
+    const el = trackRef.current;
+    drag.current = { x: e.clientX, scroll: el.scrollLeft, active: true };
+    el.setPointerCapture(e.pointerId);
+  };
+  const onPointerMove = (e) => {
+    if (!drag.current || !drag.current.active) return;
+    trackRef.current.scrollLeft = drag.current.scroll - (e.clientX - drag.current.x);
+  };
+  const onPointerUp = () => {
+    if (drag.current) drag.current.active = false;
+  };
+
+  return (
+    <div className="carousel">
+      <div
+        className="track"
+        ref={trackRef}
+        onScroll={onScroll}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+      >
+        {THEMES.map((t) => (
+          <div className="slide" key={t.id} style={paletteVars(t)}>
+            <div className="mini-stage">
+              <DemoBar />
+              <div className="mini-panel">
+                <OverviewPanel />
+              </div>
+            </div>
+            <div className="caption">
+              <span>{t.name}</span>
+              <span className="muted">{t.mode}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="carousel-nav">
+        <button onClick={() => nudge(-1)} aria-label="Previous theme">
+          ←
+        </button>
+        <span className="carousel-count">
+          {index + 1} / {THEMES.length}
+        </span>
+        <button onClick={() => nudge(1)} aria-label="Next theme">
+          →
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* --------------------------------------------------------------- the page */
 
 export default function App() {
@@ -523,7 +636,6 @@ export default function App() {
       return document.documentElement.dataset.theme;
     return "auto";
   });
-  const [palette, setPalette] = useState("default");
 
   useEffect(() => {
     const root = document.documentElement;
@@ -580,22 +692,21 @@ export default function App() {
             a guest and the panel becomes that guest.
           </p>
         </div>
-        <div className="palette-switch">
-          <span className="palette-label">panel palette</span>
-          <button
-            className={palette === "default" ? "on" : ""}
-            onClick={() => setPalette("default")}
-          >
-            default
-          </button>
-          <button
-            className={palette === "gruvbox" ? "on" : ""}
-            onClick={() => setPalette("gruvbox")}
-          >
-            gruvbox
-          </button>
+        <Stage />
+      </section>
+
+      <section>
+        <div className="sec-head">
+          <div className="sec-num">Themes</div>
+          <h2>The same panel, in every Omarchy theme</h2>
+          <p>
+            The panel reads its colours from the active theme — foreground,
+            accent, background and urgent — and derives the rest. Swipe through
+            the shipped set; the figures are the same fabricated cluster in
+            every one.
+          </p>
         </div>
-        <Stage palette={palette} />
+        <ThemeCarousel />
       </section>
 
       <section>
