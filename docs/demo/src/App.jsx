@@ -598,10 +598,11 @@ export default function App() {
           oma<span>prox</span>
         </h1>
         <p className="lede">
-          A read-only Proxmox VE panel that hangs off the Omarchy bar. It answers{" "}
-          <em>what is running, what died, and how hard is it working</em> — then gets out
-          of the way. Nothing in the panel starts, stops, migrates or reconfigures a
-          guest; the only thing it opens is a window you were going to open anyway.
+          Every container and VM on your Proxmox cluster, in your Omarchy bar.{" "}
+          <em>What is running, what died, and how hard it is working</em> — at a glance,
+          with the full numbers one keypress away and a shell or a remote desktop on any
+          guest without leaving the keyboard. It only ever reads: nothing here can start,
+          stop or reconfigure a thing.
         </p>
         <div className="facts">
           <span className="fact hot">read-only</span>
@@ -617,43 +618,68 @@ export default function App() {
 
       <section>
         <div className="sec-head">
-          <div className="sec-num">Shape of it</div>
-          <h2>Built to be cheap and safe</h2>
+          <div className="sec-num">What you get</div>
+          <h2>The whole cluster, one keypress deep</h2>
         </div>
         <div className="grid2">
           <ul className="notes">
             <li>
-              <b>Keyboard-first.</b> <code>j/k</code> move, <code>l</code> or Enter
-              descends, <code>h</code> or Escape comes back and restores the cursor.{" "}
-              <code>/</code> searches name, vmid, node or OS.
+              <b>Every LXC and VM,</b> across every node, with a light that says
+              running, stopped, held or in trouble.
             </li>
             <li>
-              <b>Status without hue.</b> LEDs use form and brightness rather than
-              colour, so they read fine in monochrome themes.
+              <b>Press one for its numbers.</b> CPU, memory, swap, disk, network and
+              disk I/O, plus uptime, OS, address and autostart.
+            </li>
+            <li>
+              <b>Press <code>t</code> for a console.</b> <code>pct enter</code> for a
+              container, SSH for a Linux VM, <code>xfreerdp3</code> for Windows — asked
+              for once, then remembered.
             </li>
           </ul>
           <ul className="notes">
             <li>
-              <b>Auth is an API token,</b> <code>PVEAPIToken=user@pve!omarchy=…</code>,
-              with <code>VM.Audit</code>, <code>Sys.Audit</code> and{" "}
-              <code>Datastore.Audit</code> only. A token that cannot stop a VM cannot
-              stop a VM by accident. Written to curl's stdin as a config file, never
-              into argv.
+              <b>Never leave the keyboard.</b> <code>j/k</code> move, Enter descends,{" "}
+              <code>h</code> comes back, <code>/</code> searches by name, vmid, node or
+              OS, <code>o</code> opens the Proxmox web UI.
             </li>
             <li>
-              <b>The read-only boundary is the point.</b> No start, stop, reboot,
-              migrate, snapshot or config write — Proxmox's own web UI is better at all
-              of those, and it is one keypress away on <code>o</code>.
+              <b>It looks like your desktop.</b> Every colour comes from your Omarchy
+              theme — status included, which is why it still reads on a monochrome one.
             </li>
             <li>
-              <b>No passwords in config.</b> RDP credentials live in your login keyring,
-              asked for once and verified before they are saved; SSH consoles offer a
-              one-time key install and store nothing.
+              <b>Quiet when nothing is wrong.</b> The alert section only exists when
+              something needs you, so its presence is the signal.
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section>
+        <div className="sec-head">
+          <div className="sec-num">Safe to leave running</div>
+          <h2>It cannot break anything</h2>
+        </div>
+        <div className="grid2">
+          <ul className="notes">
+            <li>
+              <b>Read-only by construction.</b> Every call is a GET, and the API token
+              only needs the stock <code>PVEAuditor</code> role. A token that cannot
+              stop a VM cannot stop one by accident.
             </li>
             <li>
-              <b>Console commands live in settings,</b> not in code, so the terminal,
-              the SSH user and the <code>xfreerdp3</code> flags are yours to set per
-              install.
+              <b>No secrets in your config.</b> The token lives in its own file, RDP
+              credentials in your login keyring, and SSH consoles offer a one-time key
+              install instead of storing a password.
+            </li>
+          </ul>
+          <ul className="notes">
+            <li>
+              <b>One request per poll,</b> and none at all while the panel is closed.
+            </li>
+            <li>
+              <b>Needs:</b> Proxmox VE, a read-only API token, about two minutes.{" "}
+              <a href="https://github.com/AndresSM415/omaprox#setup">Setup →</a>
             </li>
           </ul>
         </div>
