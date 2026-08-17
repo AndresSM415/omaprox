@@ -52,6 +52,12 @@ Panel {
   property int overviewCursor: 0
 
   readonly property bool inGuest: pve.selectedKey !== "" && filter === ""
+  readonly property bool inNode: pve.selectedNode !== null && filter === ""
+
+  // The last width each meter drew, keyed by the row's stable key, so a meter
+  // rebuilt on the next poll can glide from where it was instead of sweeping
+  // up from zero.
+  property var meterValues: ({})
 
   readonly property var rows: {
     if (!pve.credentialsLoaded) return []
@@ -136,6 +142,8 @@ Panel {
   readonly property string heroTitle: {
     if (filtering || filter !== "") return "Search"
     if (!pve.configured) return "Omaprox"
+    var node = pve.selectedNode
+    if (inNode && node) return node.name
     var guest = pve.selectedGuest
     if (inGuest && guest) return guest.name
     var label = Api.hostLabel(pve.host)
@@ -148,6 +156,9 @@ Panel {
     if (filtering || filter !== "")
       return (matchCount === 0 ? "no matches" : matchCount + " matching")
         + "  ·  esc to leave search"
+    var node = pve.selectedNode
+    if (inNode && node)
+      return "node  ·  " + String(node.status || "unknown") + "  ·  h to go back"
     var guest = pve.selectedGuest
     if (inGuest && guest) {
       return (guest.type === "lxc" ? "LXC " : "QEMU ") + guest.vmid
@@ -161,6 +172,8 @@ Panel {
 
   readonly property string heroDetail: {
     if (!pve.configured) return "SETUP"
+    var node = pve.selectedNode
+    if (inNode && node) return String(node.status || "").toUpperCase()
     var guest = pve.selectedGuest
     if (inGuest && guest && filter === "") return String(guest.status || "").toUpperCase()
     if (pve.alarms > 0) return pve.alarms + (pve.alarms === 1 ? " ALERT" : " ALERTS")
@@ -203,19 +216,41 @@ Panel {
   function enterCurrent() {
     var row = currentRow
     if (!row) return false
-    if (row.kind !== "guest" || !row.guest) return false
-    if (!inGuest) overviewCursor = cursorIndex
-    pve.selectGuest(row.key.indexOf("alert/") === 0 ? row.key.slice(6) : row.key)
+    if (row.kind === "guest" && row.guest) {
+      if (!inGuest) overviewCursor = cursorIndex
+      pve.selectGuest(row.key.indexOf("alert/") === 0 ? row.key.slice(6) : row.key)
+      finishDrill()
+      return true
+    }
+    if (row.kind === "node" || (row.kind === "guest" && row.vtype === "node")) {
+      enterNode(row.kind === "node" ? row.name : row.node)
+      return true
+    }
+    return false
+  }
+
+  function enterNode(name) {
+    if (!name) return
+    if (!inGuest && !inNode) overviewCursor = cursorIndex
+    pve.selectGuest("node/" + name)
+    finishDrill()
+  }
+
+  // Entering a guest or node from the list, or from search. The search field
+  // keeps its own text and focus independently of the filter, so both have to
+  // be dropped here or the next keystroke resumes filtering.
+  function finishDrill() {
     filter = ""
     filtering = false
+    filterField.text = ""
     cursorIndex = 0
     cursorActive = true
-    return true
+    keyCatcher.forceActiveFocus()
   }
 
   function goBack() {
     if (filter !== "" || filtering) { leaveSearch(); return true }
-    if (!inGuest) return false
+    if (!inGuest && !inNode) return false
     pve.selectGuest("")
     cursorIndex = overviewCursor
     clampCursor()
@@ -226,7 +261,7 @@ Panel {
     filtering = false
     filter = ""
     filterField.text = ""
-    cursorIndex = inGuest ? 0 : overviewCursor
+    cursorIndex = inGuest || inNode ? 0 : overviewCursor
     clampCursor()
     keyCatcher.forceActiveFocus()
   }
@@ -247,15 +282,20 @@ Panel {
       if (row.link) pve.openUrl(row.link)
       return
     }
-    if (row.kind === "guest" && row.guest && !inGuest) { enterCurrent(); return }
-    if (row.kind === "guest" && row.vtype === "node") { pve.openNodeWebUi(row.node); close(); return }
-    if (row.kind === "node") { pve.openNodeWebUi(row.name); close(); return }
+    // From the list, Enter drills into a guest or a node; once inside, it has
+    // nowhere left to go and opens the web UI instead.
+    if (!inGuest && !inNode && (row.kind === "guest" || row.kind === "node")) {
+      enterCurrent()
+      return
+    }
     openWebUi()
   }
 
   function openWebUi() {
     var guest = actionGuest
     if (guest) { pve.openWebUi(guest); close(); return }
+    var node = pve.selectedNode
+    if (node) { pve.openNodeWebUi(node.name); close(); return }
     var row = currentRow
     if (row && (row.kind === "node" || row.vtype === "node")) {
       pve.openNodeWebUi(row.name || row.node)
@@ -267,9 +307,14 @@ Panel {
 
   function openConsole() {
     var guest = actionGuest
-    if (!guest) { pve.flashStatus("No guest selected"); return }
-    pve.openConsole(guest)
-    close()
+    if (guest) { pve.openConsole(guest); close(); return }
+    // A node row in the list, or the node whose detail view is open.
+    var row = currentRow
+    var node = pve.selectedNode
+      || (row && row.kind === "node" ? pve.nodeByName(row.name) : null)
+      || (row && row.vtype === "node" ? pve.nodeByName(row.node) : null)
+    if (node) { pve.openNodeConsole(node); close(); return }
+    pve.flashStatus("Nothing selected")
   }
 
   // The address is the thing you actually paste somewhere else; the vmid is
@@ -277,6 +322,11 @@ Panel {
   function copyCurrent() {
     var row = currentRow
     if (!row) return
+    var node = pve.selectedNode
+    if (node && !actionGuest) {
+      pve.copyToClipboard(node.name, "node name")
+      return
+    }
     if (row.kind === "node" || row.vtype === "node") {
       pve.copyToClipboard(row.name || row.node, "node name")
       return
@@ -528,6 +578,7 @@ Panel {
         anchors.right: parent.right
         text: {
           if (!pve.configured) return "r retry   esc close"
+          if (root.inNode) return "j/k move   h back   t console   o web ui   c copy   r refresh"
           if (root.inGuest) return "j/k move   h back   t console   o web ui   c copy   r refresh"
           return "j/k move   ⏎ stats   t console   o web ui   / search   r refresh"
         }
@@ -677,8 +728,17 @@ Panel {
   // same thing wherever it appears.
   component Meter: Item {
     id: meter
+
+    // Bind these three; everything else is internal.
     property real percent: 0
     property string level: "ok"
+    // Stable identity for this bar across polls. Without one the meter cannot
+    // know where it last stood, and animates from zero every time.
+    property string mkey: ""
+
+    readonly property real target: Util.clamp(Number(percent) || 0, 0, 1)
+    property real fill: 0
+    property bool seeded: false
 
     implicitHeight: Math.max(Style.space(4), Math.round(Style.spacing.controlHeight * 0.14))
 
@@ -694,17 +754,38 @@ Panel {
       anchors.verticalCenter: meterTrack.verticalCenter
       height: meterTrack.height
       radius: meterTrack.radius
-      width: meterTrack.width * Util.clamp(meter.percent, 0, 1)
+      width: meterTrack.width * meter.fill
       // Warn is the same colour at reduced strength rather than a second hue,
       // so a filling meter reads as "on the way there" instead of as a
       // different kind of problem.
       color: meter.level === "crit" ? root.urgent
         : (meter.level === "warn" ? Util.alpha(root.urgent, 0.75) : root.foreground)
-
-      Behavior on width {
-        NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
-      }
     }
+
+    // Only animates once the bar has been seeded, so the jump to the
+    // remembered level on creation is instant and invisible.
+    Behavior on fill {
+      enabled: meter.seeded
+      NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+    }
+
+    // Every poll rebuilds the row model, which destroys and rebuilds these
+    // delegates — a fresh meter has no idea the same bar was already on screen
+    // at 40%, so it starts at zero and sweeps up, all of them together. The
+    // panel remembers the last level per key, so a rebuilt bar can start where
+    // its predecessor stopped and simply glide to the new reading.
+    Component.onCompleted: {
+      var remembered = meter.mkey !== "" ? root.meterValues[meter.mkey] : undefined
+      meter.fill = remembered !== undefined ? remembered : meter.target
+      meter.seeded = true
+      meter.fill = meter.target
+    }
+
+    onTargetChanged: if (meter.seeded) meter.fill = meter.target
+
+    // Recorded continuously rather than only at the end, so a delegate torn
+    // down mid-sweep is replaced by one that resumes from the same place.
+    onFillChanged: if (meter.mkey !== "") root.meterValues[meter.mkey] = meter.fill
   }
 
   // A guest: console button, LED, vmid, name over a status line, and the
@@ -898,6 +979,7 @@ Panel {
             width: parent.width - meterLabel.width - meterValue.width - Style.space(16)
             percent: Number(modelData.percent) || 0
             level: String(modelData.level || "ok")
+            mkey: String(modelData.key || "")
           }
 
           Text {
@@ -966,6 +1048,7 @@ Panel {
         width: parent.width
         percent: meterEntry.row ? Number(meterEntry.row.percent) || 0 : 0
         level: meterEntry.row ? String(meterEntry.row.level || "ok") : "ok"
+        mkey: meterEntry.row ? String(meterEntry.row.key || "") : ""
       }
 
       Text {

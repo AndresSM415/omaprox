@@ -111,6 +111,12 @@ function hostLabel(host) {
 function clusterResourcesUrl(host) {
   return apiBase(host) + "/cluster/resources";
 }
+// Only fetched for the node whose detail view is open. The cluster call
+// already carries cpu/mem/disk, so this exists purely for what it adds: load
+// average, swap, IO delay, and the kernel and PVE versions.
+function nodeStatusUrl(host, node) {
+  return apiBase(host) + "/nodes/" + encodeURIComponent(node) + "/status";
+}
 function guestStatusUrl(host, node, vtype, vmid) {
   return (
     apiBase(host) +

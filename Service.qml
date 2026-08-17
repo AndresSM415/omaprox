@@ -55,6 +55,7 @@ Item {
   // the poll knows which per-guest status to keep fresh.
   property string selectedKey: ""
   property var guestStatus: ({ key: "", data: null })
+  property var nodeStatus: ({ key: "", data: null })
 
   readonly property var selectedGuest: {
     if (selectedKey === "") return null
@@ -64,6 +65,16 @@ Item {
   }
 
   readonly property var selectedConfig: selectedKey !== "" ? (configs[selectedKey] || null) : null
+
+  // A node is selected through the same key channel as a guest, namespaced
+  // with a "node/" prefix so the two can never collide.
+  readonly property var selectedNode: {
+    if (selectedKey.indexOf("node/") !== 0) return null
+    var name = selectedKey.slice(5)
+    for (var i = 0; i < nodes.length; i++)
+      if (nodes[i].name === name) return nodes[i]
+    return null
+  }
 
   readonly property string selectedAddress: {
     var guest = selectedGuest
@@ -133,7 +144,9 @@ Item {
     return {
       guests: guests, nodes: nodes, configs: configs,
       selectedGuest: selectedGuest,
+      selectedNode: selectedNode,
       guestStatus: guestStatus,
+      nodeStatus: nodeStatus,
       consoleAddress: selectedAddress,
       thresholds: { memWarn: memWarn },
       showTemplates: showTemplates,
@@ -295,9 +308,10 @@ Item {
       root.refreshing = false
       root.lastRefreshMs = Date.now()
       root.queueConfigs()
-      // The open guest's numbers come from its own endpoint, and the cluster
-      // poll is the clock everything else runs on, so it drives that too.
-      if (root.selectedKey !== "") root.refreshGuestStatus()
+      // The open guest's or node's numbers come from its own endpoint, and
+      // the cluster poll is the clock everything else runs on, so it drives
+      // that too.
+      if (root.selectedKey !== "") root.refreshSelectedStatus()
     }, function() { root.refreshing = false }))
   }
 
@@ -376,7 +390,43 @@ Item {
     // memory under the new guest's name for one poll is worse than showing the
     // cluster-wide figures the detail view falls back to.
     root.guestStatus = { key: "", data: null }
-    if (root.selectedKey !== "") root.refreshGuestStatus()
+    root.nodeStatus = { key: "", data: null }
+    if (root.selectedKey !== "") root.refreshSelectedStatus()
+  }
+
+  // Whichever of the two is open. Only one can be selected at a time, so they
+  // share the single request slot.
+  function refreshSelectedStatus() {
+    if (selectedNode) refreshNodeStatus()
+    else refreshGuestStatus()
+  }
+
+  function refreshNodeStatus() {
+    var node = selectedNode
+    if (!node) return
+    if (statusReq.running) return
+    if (token === "" || host === "") return
+
+    var key = root.selectedKey
+    root.statusRefreshing = true
+    statusReq.send(Api.nodeStatusUrl(host, node.name),
+      function(exitCode, text, errorText) {
+        root.statusRefreshing = false
+        if (exitCode !== 0) {
+          root.lastError = "node status: " + root.curlFailure(exitCode, errorText)
+          return
+        }
+        var response = Api.parseResponse(text)
+        if (!response.ok) {
+          // Not fatal: the node view still has everything the cluster call
+          // gave it, and simply shows fewer rows.
+          root.lastError = "node status: " + response.error
+          return
+        }
+        if (key !== root.selectedKey) return
+        root.lastError = ""
+        root.nodeStatus = { key: key, data: response.data }
+      })
   }
 
   function refreshGuestStatus() {
@@ -412,6 +462,27 @@ Item {
 
   // The only thing in the plugin that acts, and it acts on this machine: it
   // opens a window. Proxmox is not asked to do anything.
+  function nodeByName(name) {
+    for (var i = 0; i < nodes.length; i++)
+      if (nodes[i].name === name) return nodes[i]
+    return null
+  }
+
+  // A shell on the node itself. Same helper as a guest console, so the
+  // one-time SSH key offer covers this too.
+  function openNodeConsole(node) {
+    if (!node) return
+    // On a cluster the node has to be addressed by its own name; on a single
+    // node the API host is the same machine and is known to resolve, which a
+    // name like `pve` frequently does not.
+    var target = nodes.length > 1 ? node.name : Api.hostAuthority(host)
+    runInTerminal(
+      Util.shellQuote(helperPath("omaprox-ssh")) + " "
+        + Util.shellQuote(nodeSshUser) + " " + Util.shellQuote(target),
+      node.name + "  ·  node")
+    flashStatus("Console: " + node.name)
+  }
+
   function openConsole(guest) {
     if (!guest) return
     if (guest.status !== "running") {
