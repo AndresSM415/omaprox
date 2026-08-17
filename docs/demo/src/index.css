@@ -23,6 +23,7 @@
   --sel-edge: rgba(198, 206, 214, 0.22);
 
   --accent: #e57000;
+  --panel-edge: rgba(229, 112, 0, 0.55);
   --run: #5cc46b;
   --stop: #4a545e;
   --pause: #e0a33e;
@@ -65,6 +66,26 @@
   --ink-2: #4d5860;
   --ink-3: #79838c;
   --rule: #c5ccd2;
+}
+
+/* ------------------------------------------------------------ panel palettes
+ *
+ * The panel's colors come from the plugin reading an Omarchy theme's
+ * `colors.toml` (foreground, accent, background, red = urgent) plus a few
+ * derived shades. Each palette re-tokens the panel surface inside the stage.
+ */
+.stage[data-palette="gruvbox"] {
+  --panel-bg: #282828;
+  --panel-bg-2: #3c3836;
+  --panel-edge: rgba(125, 174, 163, 0.55);
+  --accent: #7daea3;
+  --fg: #d4be98;
+  --fg-dim: #887a62;
+  --fg-faint: #605645;
+  --track: rgba(212, 190, 152, 0.14);
+  --sel: rgba(212, 190, 152, 0.07);
+  --sel-edge: rgba(212, 190, 152, 0.22);
+  --crit: #ea6962;
 }
 
 body {
@@ -230,6 +251,41 @@ h2 {
   margin: 0;
 }
 
+.palette-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: -8px;
+}
+.palette-switch .palette-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.palette-switch button {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: transparent;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+.palette-switch button:hover {
+  color: var(--ink);
+}
+.palette-switch button.on {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 /* ---------------------------------------------------------- desktop stage */
 
 .stage {
@@ -252,7 +308,7 @@ h2 {
   justify-content: flex-end;
   gap: 16px;
   padding: 0 16px;
-  background: rgba(9, 12, 15, 0.55);
+  background: color-mix(in srgb, var(--panel-bg) 55%, transparent);
   border-bottom: 1px solid rgba(198, 206, 214, 0.08);
   color: var(--fg-dim);
   font-size: 12px;
@@ -318,7 +374,7 @@ h2 {
   width: 334px;
   flex: 0 0 334px;
   background: var(--panel-bg);
-  border: 1px solid rgba(229, 112, 0, 0.55);
+  border: 1px solid var(--panel-edge);
   border-radius: 3px;
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
   color: var(--fg);
@@ -338,6 +394,7 @@ h2 {
 .hero .mark {
   flex: 0 0 auto;
   margin-top: 2px;
+  color: var(--fg);
 }
 .hero .txt {
   min-width: 0;
@@ -626,7 +683,7 @@ h2 {
   min-width: 340px;
 }
 .win.focused {
-  border-color: rgba(229, 112, 0, 0.55);
+  border-color: var(--panel-edge);
 }
 .win-bar {
   display: flex;

@@ -8,9 +8,9 @@ const INSTALL_CMD =
 function Mark({ size = 20, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M8 1.6 14 4.6 8 7.6 2 4.6 8 1.6Z" stroke={color} strokeWidth="1.1" strokeLinejoin="round" />
-      <path d="M2 8 8 11 14 8" stroke={color} strokeWidth="1.1" strokeLinejoin="round" opacity=".8" />
-      <path d="M2 11.4 8 14.4 14 11.4" stroke={color} strokeWidth="1.1" strokeLinejoin="round" opacity=".5" />
+      <path d="M8 1.6 14 4.6 8 7.6 2 4.6 8 1.6Z" style={{ stroke: color }} strokeWidth="1.1" strokeLinejoin="round" />
+      <path d="M2 8 8 11 14 8" style={{ stroke: color }} strokeWidth="1.1" strokeLinejoin="round" opacity=".8" />
+      <path d="M2 11.4 8 14.4 14 11.4" style={{ stroke: color }} strokeWidth="1.1" strokeLinejoin="round" opacity=".5" />
     </svg>
   );
 }
@@ -18,9 +18,9 @@ function Mark({ size = 20, color = "currentColor" }) {
 function ContainerMark({ size = 20 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="2" y="4.2" width="12" height="8" rx="1.3" stroke="#c6ced6" strokeWidth="1.1" />
-      <path d="M2 7h12" stroke="#c6ced6" strokeWidth="1.1" opacity=".55" />
-      <path d="M4.4 9.6h2.2" stroke="#c6ced6" strokeWidth="1.1" strokeLinecap="round" opacity=".55" />
+      <rect x="2" y="4.2" width="12" height="8" rx="1.3" stroke="currentColor" strokeWidth="1.1" />
+      <path d="M2 7h12" stroke="currentColor" strokeWidth="1.1" opacity=".55" />
+      <path d="M4.4 9.6h2.2" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" opacity=".55" />
     </svg>
   );
 }
@@ -28,8 +28,8 @@ function ContainerMark({ size = 20 }) {
 function VmMark({ size = 20 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="2.4" y="2" width="11.2" height="12" rx="1.3" stroke="#c6ced6" strokeWidth="1.1" />
-      <path d="M4.8 4.6h6.4M4.8 7h6.4M4.8 9.4h3.4" stroke="#c6ced6" strokeWidth="1.1" strokeLinecap="round" opacity=".55" />
+      <rect x="2.4" y="2" width="11.2" height="12" rx="1.3" stroke="currentColor" strokeWidth="1.1" />
+      <path d="M4.8 4.6h6.4M4.8 7h6.4M4.8 9.4h3.4" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" opacity=".55" />
     </svg>
   );
 }
@@ -200,7 +200,7 @@ function OverviewPanel() {
   return (
     <Panel>
       <Hero
-        mark={<Mark color="#c6ced6" />}
+        mark={<Mark />}
         title="homelab"
         meta="9 up · 2 down · 1 paused"
         badge="2 ALERTS"
@@ -325,9 +325,9 @@ function VmPanel() {
   );
 }
 
-function Stage() {
+function Stage({ palette }) {
   return (
-    <div className="stage">
+    <div className="stage" data-palette={palette}>
       <div className="bar">
         <div className="left">
           <span className="ws">
@@ -339,7 +339,7 @@ function Stage() {
           <span>nginx-proxy — pct enter</span>
         </div>
         <span className="bar-item active">
-          <Mark size={14} color="#e57000" />
+          <Mark size={14} color="var(--accent)" />
           <span className="bar-count">9</span>
         </span>
         <span className="bar-item">
@@ -548,6 +548,7 @@ export default function App() {
       return document.documentElement.dataset.theme;
     return "auto";
   });
+  const [palette, setPalette] = useState("default");
 
   useEffect(() => {
     const root = document.documentElement;
@@ -604,7 +605,22 @@ export default function App() {
             a guest and the panel becomes that guest.
           </p>
         </div>
-        <Stage />
+        <div className="palette-switch">
+          <span className="palette-label">panel palette</span>
+          <button
+            className={palette === "default" ? "on" : ""}
+            onClick={() => setPalette("default")}
+          >
+            default
+          </button>
+          <button
+            className={palette === "gruvbox" ? "on" : ""}
+            onClick={() => setPalette("gruvbox")}
+          >
+            gruvbox
+          </button>
+        </div>
+        <Stage palette={palette} />
       </section>
 
       <section>
