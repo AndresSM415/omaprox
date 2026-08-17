@@ -313,11 +313,11 @@ function VmPanel() {
         <Kv k="OS" v="Windows Server 2022" />
         <Kv k="Address" v="10.0.20.42/24" />
         <Kv k="Agent" v="qemu-guest-agent 108.0.1" tone="ok" />
-        <Kv k="Console" v={<span style={{ color: "var(--rdp)" }}>rdp :3389</span>} />
+        <Kv k="Console" v="rdp :3389" />
         <Kv k="Backup" v="ok · 6h ago · pbs01" tone="ok" />
       </div>
       <div className="legend">
-        t opens <span style={{ color: "var(--rdp)" }}>xfreerdp3 /v:10.0.20.42</span>
+        t opens <span style={{ color: "var(--fg)" }}>xfreerdp3 /v:10.0.20.42</span>
         <br />
         h back &nbsp; ⏎ web UI &nbsp; c copy address &nbsp; r refresh
       </div>
@@ -431,14 +431,39 @@ function paletteVars(t) {
     "--panel-bg": t.bg,
     "--panel-bg-2": t.bg2,
     "--accent": t.accent,
-    "--panel-edge": alpha(t.accent, 0.55),
+    // popups.border defaults to the theme accent at full opacity, 2px wide.
+    // No shipped theme overrides it, so this is what every user sees.
+    "--panel-edge": t.accent,
     "--fg": fg,
     "--fg-dim": scale(fg, 1.55),
     "--fg-faint": scale(fg, 2.2),
     "--track": alpha(fg, 0.14),
-    "--sel": alpha(fg, 0.07),
-    "--sel-edge": alpha(fg, 0.22),
+    // Style.hoverFillFor / hoverBorderFor defaults: 0.08 fill, 0.25 border.
+    "--sel": alpha(fg, 0.08),
+    "--sel-edge": alpha(fg, 0.25),
+
+    // Status carries no hue of its own. The panel paints a running guest in the
+    // theme foreground, anything held or stopped in the dimmed foreground, and
+    // reserves the theme's red for things that are wrong — which is the whole
+    // reason it still reads on a monochrome theme. Inventing a green here would
+    // show a plugin that does not exist.
+    "--run": fg,
+    "--run-halo": alpha(fg, 0.22),
+    "--pause": scale(fg, 1.55),
+    "--stop": scale(fg, 1.55),
     "--crit": t.red,
+    "--crit-halo": alpha(t.red, 0.22),
+
+    // Hairlines on the mocked bar and terminal windows. Derived so they do not
+    // vanish on the five light themes, where a fixed pale grey is invisible.
+    "--hairline": alpha(fg, 0.18),
+    "--hairline-soft": alpha(fg, 0.1),
+
+    // The desktop behind the panels. Real Omarchy puts a wallpaper here, but it
+    // must at least follow the theme's own light/dark — light themes were
+    // rendering their pale panels on a permanently dark desk.
+    "--desk-1": scale(t.bg, 1.35),
+    "--desk-2": t.bg2,
   };
 }
 

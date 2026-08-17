@@ -28,6 +28,8 @@
   --stop: #4a545e;
   --pause: #e0a33e;
   --crit: #e0524e;
+  /* Windows' own chrome inside the mocked RDP window — not plugin UI,
+     which uses no hue of its own. */
   --rdp: #6aa6d8;
 
   --mono:
@@ -330,7 +332,7 @@ h2 {
   gap: 16px;
   padding: 0 16px;
   background: color-mix(in srgb, var(--panel-bg) 55%, transparent);
-  border-bottom: 1px solid rgba(198, 206, 214, 0.08);
+  border-bottom: 1px solid var(--hairline-soft);
   color: var(--fg-dim);
   font-size: 12px;
 }
@@ -410,7 +412,7 @@ h2 {
   width: 334px;
   flex: 0 0 334px;
   background: var(--panel-bg);
-  border: 1px solid var(--panel-edge);
+  border: 2px solid var(--panel-edge);
   border-radius: 3px;
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
   color: var(--fg);
@@ -461,13 +463,12 @@ h2 {
   color: var(--fg-dim);
   white-space: nowrap;
 }
-.badge.run {
-  color: var(--run);
-  border-color: rgba(92, 196, 107, 0.5);
-}
+/* PanelHero paints its pill the same way whatever the text is: dimmed
+   foreground on a neutral border. RUNNING and 2 ALERTS are not colour-coded. */
+.badge.run,
 .badge.warn {
-  color: var(--pause);
-  border-color: rgba(224, 163, 62, 0.5);
+  color: var(--fg-dim);
+  border-color: var(--fg-faint);
 }
 
 .rule {
@@ -504,7 +505,9 @@ h2 {
   border-color: var(--sel-edge);
 }
 .row.hovered {
-  background: rgba(198, 206, 214, 0.04);
+  /* the panel moves its cursor on hover, so a hovered row is the cursor row */
+  background: var(--sel);
+  border-color: var(--sel-edge);
 }
 
 .tbtn {
@@ -522,10 +525,6 @@ h2 {
   color: var(--fg);
   border-color: var(--fg-dim);
 }
-.tbtn.rdp {
-  color: var(--rdp);
-  border-color: rgba(106, 166, 216, 0.42);
-}
 .tbtn.off {
   opacity: 0.34;
 }
@@ -539,15 +538,16 @@ h2 {
 }
 .led.run {
   background: var(--run);
-  box-shadow: 0 0 6px rgba(92, 196, 107, 0.75);
+  /* dot, a gap of panel background, then the 0.22 halo ring */
+  box-shadow: 0 0 0 2px var(--panel-bg), 0 0 0 3px var(--run-halo);
 }
 .led.pause {
+  /* held: dimmed and filled, no halo — only run and crit are lit */
   background: var(--pause);
-  box-shadow: 0 0 6px rgba(224, 163, 62, 0.55);
 }
 .led.crit {
   background: var(--crit);
-  box-shadow: 0 0 7px rgba(224, 82, 78, 0.8);
+  box-shadow: 0 0 0 2px var(--panel-bg), 0 0 0 3px var(--crit-halo);
 }
 .led.stop {
   background: transparent;
@@ -639,7 +639,8 @@ h2 {
   background: var(--fg);
 }
 .meter i.warn {
-  background: var(--pause);
+  /* Util.alpha(urgent, 0.75) — a quieter red, not a second hue */
+  background: color-mix(in srgb, var(--crit) 75%, transparent);
 }
 .meter i.crit {
   background: var(--crit);
@@ -711,7 +712,7 @@ h2 {
 
 .win {
   background: var(--panel-bg);
-  border: 1px solid rgba(198, 206, 214, 0.18);
+  border: 1px solid var(--hairline);
   border-radius: 4px;
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
   overflow: hidden;
@@ -727,7 +728,7 @@ h2 {
   gap: 8px;
   padding: 7px 10px;
   background: var(--panel-bg-2);
-  border-bottom: 1px solid rgba(198, 206, 214, 0.1);
+  border-bottom: 1px solid var(--hairline-soft);
   font-size: 11px;
   color: var(--fg-dim);
 }
@@ -772,7 +773,7 @@ h2 {
 }
 
 .rdp-note {
-  border: 1px solid rgba(198, 206, 214, 0.14);
+  border: 1px solid var(--hairline);
   border-radius: 3px;
   padding: 14px;
   text-align: center;
@@ -783,7 +784,7 @@ h2 {
   display: flex;
   align-items: center;
   gap: 8px;
-  border-top: 1px solid rgba(198, 206, 214, 0.1);
+  border-top: 1px solid var(--hairline-soft);
   padding: 6px 4px 0;
   font-size: 11.5px;
   color: var(--fg-dim);
