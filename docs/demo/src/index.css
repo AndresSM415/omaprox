@@ -303,6 +303,9 @@ h2 {
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
 }
+.carousel-nav .play-btn {
+  margin-left: auto;
+}
 
 /* ---------------------------------------------------------- desktop stage */
 
@@ -792,54 +795,6 @@ h2 {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
   gap: 18px;
-}
-.tbl-wrap {
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-  overflow-x: auto;
-}
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-thead th {
-  font-size: 10.5px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-  text-align: left;
-  padding: 10px 12px 8px;
-  border-bottom: 1px solid var(--rule);
-  font-weight: 400;
-}
-tbody td {
-  padding: 9px 12px;
-  border-bottom: 1px solid var(--rule);
-  vertical-align: top;
-}
-tbody tr:last-child td {
-  border-bottom: 0;
-}
-td.k {
-  color: var(--ink-2);
-  white-space: nowrap;
-}
-td.v {
-  color: var(--ink);
-}
-.swatch {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-.swatch i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: block;
-  flex: 0 0 auto;
 }
 
 ul.notes {

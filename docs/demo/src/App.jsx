@@ -383,105 +383,6 @@ function ThemedStage({ t }) {
   );
 }
 
-/* -------------------------------------------------------------- encoding */
-
-function LedTable() {
-  const rows = [
-    {
-      swatch: (
-        <i style={{ background: "#5cc46b", boxShadow: "0 0 6px rgba(92,196,107,.75)" }} />
-      ),
-      label: "filled, lit",
-      meaning: (
-        <>
-          running — status <code>running</code>, no alarm
-        </>
-      ),
-    },
-    {
-      swatch: (
-        <i
-          style={{ background: "transparent", boxShadow: "inset 0 0 0 1.5px #4a545e" }}
-        />
-      ),
-      label: "hollow",
-      meaning: <>stopped. The row dims, the trailing figures collapse to an em dash</>,
-    },
-    {
-      swatch: (
-        <i style={{ background: "#e0a33e", boxShadow: "0 0 6px rgba(224,163,62,.55)" }} />
-      ),
-      label: "amber",
-      meaning: <>paused or suspended — memory still held, CPU idle</>,
-    },
-    {
-      swatch: (
-        <i style={{ background: "#e0524e", boxShadow: "0 0 7px rgba(224,82,78,.8)" }} />
-      ),
-      label: "red",
-      meaning: (
-        <>
-          running but unhappy: high IO delay, failed backup, autostart guest that is
-          down
-        </>
-      ),
-    },
-  ];
-  return (
-    <div className="tbl-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>LED</th>
-            <th>State</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.label}>
-              <td className="k">
-                <span className="swatch">
-                  {r.swatch} {r.label}
-                </span>
-              </td>
-              <td className="v">{r.meaning}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function ConsoleTable() {
-  const rows = [
-    { k: "LXC", v: <><code>pct enter &lt;vmid&gt;</code> on the guest's node</> },
-    { k: "VM, Linux", v: <>SSH to the guest itself, one-time key setup offered</> },
-    { k: "VM, Windows", v: <><code>xfreerdp3</code> against the resolved address</> },
-    { k: "Stopped", v: <>dimmed and inert — the plugin will not start a guest to give you a shell</> },
-  ];
-  return (
-    <div className="tbl-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Console button</th>
-            <th>Opens</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.k}>
-              <td className="k">{r.k}</td>
-              <td className="v">{r.v}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 /* ---------------------------------------------------------------- install */
 
 function InstallBlock() {
@@ -545,6 +446,7 @@ function ThemeCarousel() {
   const trackRef = useRef(null);
   const drag = useRef(null);
   const [index, setIndex] = useState(0);
+  const [playing, setPlaying] = useState(true);
 
   const slideStep = () => {
     const el = trackRef.current;
@@ -566,6 +468,7 @@ function ThemeCarousel() {
   // Auto-advance every 10 seconds, wrapping at the end. Manual scrolling just
   // changes where the next tick lands.
   useEffect(() => {
+    if (!playing) return;
     const id = setInterval(() => {
       const el = trackRef.current;
       if (!el) return;
@@ -575,7 +478,7 @@ function ThemeCarousel() {
       el.scrollTo({ left: next * step, behavior: "smooth" });
     }, 10000);
     return () => clearInterval(id);
-  }, []);
+  }, [playing]);
 
   const onPointerDown = (e) => {
     const el = trackRef.current;
@@ -604,6 +507,13 @@ function ThemeCarousel() {
         </span>
         <button onClick={() => nudge(1)} aria-label="Next theme">
           →
+        </button>
+        <button
+          className="play-btn"
+          onClick={() => setPlaying((p) => !p)}
+          aria-label={playing ? "Pause auto-advance" : "Resume auto-advance"}
+        >
+          {playing ? "⏸" : "▶"}
         </button>
       </div>
       <div
@@ -678,30 +588,7 @@ export default function App() {
         <InstallBlock />
       </header>
 
-      <section>
-        <div className="sec-head">
-          <div className="sec-num">The panel</div>
-          <h2>One list, then one guest</h2>
-          <p>
-            The bar icon carries the running count and turns amber when something needs
-            looking at. Click it and the panel drops: every container and VM on the
-            cluster, each with a status LED and a console button on its left edge. Press
-            a guest and the panel becomes that guest.
-          </p>
-        </div>
-        <ThemeCarousel />
-      </section>
-
-      <section>
-        <div className="sec-head">
-          <div className="sec-num">Encoding</div>
-          <h2>What the LED and the button mean</h2>
-        </div>
-        <div className="grid2">
-          <LedTable />
-          <ConsoleTable />
-        </div>
-      </section>
+      <ThemeCarousel />
 
       <section>
         <div className="sec-head">
