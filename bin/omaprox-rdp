@@ -116,7 +116,10 @@ reachable() {
     \[*\])   host=${ADDRESS#[}; host=${host%]} ;;
     *:*)     host=${ADDRESS%:*}; port=${ADDRESS##*:} ;;
   esac
-  timeout 6 bash -c "exec 3<>/dev/tcp/$host/$port" 2>/dev/null
+  # The address is handed over as data (argv), never interpolated into the
+  # command text: an address is a string that came from the cluster, and a
+  # string that becomes shell code is a command execution bug.
+  timeout 6 bash -c 'exec 3<>"$1"' _ "/dev/tcp/$host/$port" 2>/dev/null
 }
 
 REFUSED_RE="ERRCONNECT_(LOGON_FAILURE|ACCOUNT_[A-Z_]+|PASSWORD_[A-Z_]+|ACCESS_DENIED|AUTHENTICATION_FAILED)"
