@@ -261,26 +261,6 @@ h2 {
   gap: 10px;
 }
 
-.mini-stage {
-  width: max-content;
-  min-width: 424px;
-  background: radial-gradient(
-    120% 100% at 22% 0%,
-    var(--desk-2) 0%,
-    var(--desk-1) 62%
-  );
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  padding-bottom: 16px;
-  overflow: hidden;
-}
-
-.mini-panel {
-  display: flex;
-  justify-content: center;
-  padding: 18px 24px 0;
-}
-
 .caption {
   display: flex;
   justify-content: space-between;
@@ -328,7 +308,7 @@ h2 {
 
 /* ---------------------------------------------------------- desktop stage */
 
-.stage {
+.themed-stage {
   background: radial-gradient(
     120% 100% at 22% 0%,
     var(--desk-2) 0%,
@@ -336,8 +316,8 @@ h2 {
   );
   border: 1px solid var(--rule);
   border-radius: 4px;
-  padding: 0 0 34px;
-  overflow-x: auto;
+  padding-bottom: 26px;
+  overflow: hidden;
 }
 
 /* the omarchy bar */
@@ -806,22 +786,6 @@ h2 {
   padding: 6px 4px 0;
   font-size: 11.5px;
   color: var(--fg-dim);
-}
-
-.cap {
-  font-family: var(--prose);
-  font-size: 15.5px;
-  color: var(--ink-2);
-  border-left: 2px solid var(--accent);
-  padding-left: 14px;
-  max-width: 74ch;
-  margin-top: 26px;
-}
-.cap b {
-  font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 400;
-  color: var(--ink);
 }
 
 /* ------------------------------------------------------------- encoding */

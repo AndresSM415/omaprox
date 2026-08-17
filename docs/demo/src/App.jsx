@@ -327,9 +327,9 @@ function VmPanel() {
   );
 }
 
-function Stage() {
+function ThemedStage({ t }) {
   return (
-    <div className="stage">
+    <div className="themed-stage" style={paletteVars(t)}>
       <DemoBar />
 
       <div className="panels">
@@ -379,15 +379,6 @@ function Stage() {
               <span style={{ marginLeft: "auto" }}>13:42</span>
             </div>
           </div>
-        </div>
-      </div>
-
-      <div style={{ padding: "0 24px" }}>
-        <div className="cap">
-          <b>Left edge, every row.</b> The console button is the only actuator in the
-          plugin — it spawns a window, it does not touch the guest. Linux gets a
-          terminal, Windows gets <b>xfreerdp3</b>, a stopped guest gets a dimmed
-          button that does nothing.
         </div>
       </div>
     </div>
@@ -574,6 +565,20 @@ function ThemeCarousel() {
     trackRef.current &&
     trackRef.current.scrollBy({ left: dir * slideStep(), behavior: "smooth" });
 
+  // Auto-advance every 10 seconds, wrapping at the end. Manual scrolling just
+  // changes where the next tick lands.
+  useEffect(() => {
+    const id = setInterval(() => {
+      const el = trackRef.current;
+      if (!el) return;
+      const step = slideStep();
+      const at = Math.round(el.scrollLeft / step);
+      const next = (at + 1) % THEMES.length;
+      el.scrollTo({ left: next * step, behavior: "smooth" });
+    }, 10000);
+    return () => clearInterval(id);
+  }, []);
+
   const onPointerDown = (e) => {
     const el = trackRef.current;
     drag.current = { x: e.clientX, scroll: el.scrollLeft, active: true };
@@ -589,30 +594,6 @@ function ThemeCarousel() {
 
   return (
     <div className="carousel">
-      <div
-        className="track"
-        ref={trackRef}
-        onScroll={onScroll}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-      >
-        {THEMES.map((t) => (
-          <div className="slide" key={t.id} style={paletteVars(t)}>
-            <div className="mini-stage">
-              <DemoBar />
-              <div className="mini-panel">
-                <OverviewPanel />
-              </div>
-            </div>
-            <div className="caption">
-              <span>{t.name}</span>
-              <span className="muted">{t.mode}</span>
-            </div>
-          </div>
-        ))}
-      </div>
       <div className="carousel-nav">
         <button onClick={() => nudge(-1)} aria-label="Previous theme">
           ←
@@ -623,6 +604,25 @@ function ThemeCarousel() {
         <button onClick={() => nudge(1)} aria-label="Next theme">
           →
         </button>
+      </div>
+      <div
+        className="track"
+        ref={trackRef}
+        onScroll={onScroll}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+      >
+        {THEMES.map((t) => (
+          <div className="slide" key={t.id}>
+            <ThemedStage t={t} />
+            <div className="caption">
+              <span>{t.name}</span>
+              <span className="muted">{t.mode}</span>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -690,20 +690,6 @@ export default function App() {
             looking at. Click it and the panel drops: every container and VM on the
             cluster, each with a status LED and a console button on its left edge. Press
             a guest and the panel becomes that guest.
-          </p>
-        </div>
-        <Stage />
-      </section>
-
-      <section>
-        <div className="sec-head">
-          <div className="sec-num">Themes</div>
-          <h2>The same panel, in every Omarchy theme</h2>
-          <p>
-            The panel reads its colours from the active theme — foreground,
-            accent, background and urgent — and derives the rest. Swipe through
-            the shipped set; the figures are the same fabricated cluster in
-            every one.
           </p>
         </div>
         <ThemeCarousel />
