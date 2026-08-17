@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import DemoBar from "./Bar.jsx";
 
 const INSTALL_CMD =
   "omarchy plugin add https://github.com/AndresSM415/omaprox.git --enable";
@@ -328,33 +329,7 @@ function VmPanel() {
 function Stage({ palette }) {
   return (
     <div className="stage" data-palette={palette}>
-      <div className="bar">
-        <div className="left">
-          <span className="ws">
-            <i className="on" />
-            <i />
-            <i />
-            <i />
-          </span>
-          <span>nginx-proxy — pct enter</span>
-        </div>
-        <span className="bar-item active">
-          <Mark size={14} color="var(--accent)" />
-          <span className="bar-count">9</span>
-        </span>
-        <span className="bar-item">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M2 11c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" strokeWidth="1.2" />
-          </svg>
-        </span>
-        <span className="bar-item">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <rect x="2" y="5" width="11" height="6" rx="1.4" stroke="currentColor" strokeWidth="1.2" />
-            <path d="M14 7.5v1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-          </svg>
-        </span>
-        <span className="bar-item">13:42</span>
-      </div>
+      <DemoBar />
 
       <div className="panels">
         <OverviewPanel />

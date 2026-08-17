@@ -303,9 +303,9 @@ h2 {
 /* the omarchy bar */
 .bar {
   height: 34px;
+  min-width: max-content;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 16px;
   padding: 0 16px;
   background: color-mix(in srgb, var(--panel-bg) 55%, transparent);
@@ -314,10 +314,25 @@ h2 {
   font-size: 12px;
 }
 .bar .left {
-  margin-right: auto;
   display: flex;
   align-items: center;
   gap: 14px;
+}
+.bar .center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+.bar .right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.bar-label {
+  font-size: 11px;
+  letter-spacing: 0.02em;
 }
 .ws {
   display: flex;
