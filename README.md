@@ -1,5 +1,7 @@
 # Omaprox — Proxmox VE in the Omarchy bar
 
+**[Live demo →](https://omaprox.andressm.com)** — every theme, no Proxmox required.
+
 A read-only Proxmox VE dashboard for the Omarchy 4 (Quattro) bar: every
 container and VM on your cluster with a status light, per-guest stats, and
 one key to a console — `pct enter` for containers, SSH for Linux VMs,
