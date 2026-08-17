@@ -76,7 +76,7 @@ export default function DemoBar() {
             <path d="M2 8 8 11 14 8" style={{ stroke: "var(--accent)" }} strokeWidth="1.1" strokeLinejoin="round" opacity=".8" />
             <path d="M2 11.4 8 14.4 14 11.4" style={{ stroke: "var(--accent)" }} strokeWidth="1.1" strokeLinejoin="round" opacity=".5" />
           </svg>
-          <span className="bar-count">9</span>
+          <span className="bar-count">8</span>
         </Widget>
         <Widget icon="claude" />
         <Widget icon="wifi" />

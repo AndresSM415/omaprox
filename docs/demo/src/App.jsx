@@ -188,12 +188,10 @@ const CONTAINERS = [
 ];
 
 const VMS = [
-  { vmid: 201, name: "docker-host", detail: "debian 12 · agent ok", trail: "14% · 6.0G", console: "terminal", state: "run" },
   { vmid: 202, name: "win-srv-2022", detail: "windows · rdp :3389", trail: "11.8% · 6.1G", hovered: true, console: "rdp", state: "run", consoleHint: "xfreerdp3 /v:10.0.20.42" },
   { vmid: 203, name: "home-assistant", detail: "haos 13 · agent ok", trail: "9.4% · 2.8G", console: "terminal", state: "run" },
   { vmid: 204, name: "truenas", detail: "io delay 18%", trail: "5.1% · 12.0G", led: "crit", alarm: true, console: "terminal", state: "run" },
   { vmid: 205, name: "win11-lab", detail: "stopped", trail: "—", console: "rdp", state: "stop" },
-  { vmid: 206, name: "opnsense", detail: "paused · 3h", trail: "— · 2.0G", led: "pause", console: "terminal", state: "run" },
 ];
 
 /* ---------------------------------------------------------------- panels */
@@ -204,7 +202,7 @@ function OverviewPanel() {
       <Hero
         mark={<Mark />}
         title="homelab"
-        meta="9 up · 2 down · 1 paused"
+        meta="8 up · 2 down"
         badge="2 ALERTS"
         badgeTone="warn"
       />
@@ -229,7 +227,7 @@ function OverviewPanel() {
         ))}
       </div>
       <div className="rule" />
-      <SectionHead>Virtual machines · 6</SectionHead>
+      <SectionHead>Virtual machines · 4</SectionHead>
       <div className="rows">
         {VMS.map((g) => (
           <GuestRow key={g.vmid} guest={g} />
@@ -598,6 +596,9 @@ function ThemeCarousel() {
         <button onClick={() => nudge(-1)} aria-label="Previous theme">
           ←
         </button>
+        <span className="carousel-theme">
+          {THEMES[index].name} <span className="muted">{THEMES[index].mode}</span>
+        </span>
         <span className="carousel-count">
           {index + 1} / {THEMES.length}
         </span>
@@ -617,10 +618,6 @@ function ThemeCarousel() {
         {THEMES.map((t) => (
           <div className="slide" key={t.id}>
             <ThemedStage t={t} />
-            <div className="caption">
-              <span>{t.name}</span>
-              <span className="muted">{t.mode}</span>
-            </div>
           </div>
         ))}
       </div>

@@ -261,15 +261,13 @@ h2 {
   gap: 10px;
 }
 
-.caption {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-  font-size: 12px;
-  color: var(--ink-2);
+.carousel-theme {
+  font-size: 13px;
+  color: var(--ink);
+  font-weight: 600;
 }
-.caption .muted {
+.carousel-theme .muted {
+  margin-left: 6px;
   font-size: 10.5px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
