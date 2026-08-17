@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.andressm415.omaprox",
   "name": "Omaprox",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "author": "AndresSM415",
   "license": "MIT",
   "description": "Read-only Proxmox VE dashboard in the Omarchy bar: every container and VM with a status LED, per-guest stats, and one key to a console.",
