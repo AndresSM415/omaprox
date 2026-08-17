@@ -499,15 +499,15 @@ function ThemeCarousel() {
         <button onClick={() => nudge(-1)} aria-label="Previous theme">
           ←
         </button>
+        <button onClick={() => nudge(1)} aria-label="Next theme">
+          →
+        </button>
         <span className="carousel-theme">
           {THEMES[index].name} <span className="muted">{THEMES[index].mode}</span>
         </span>
         <span className="carousel-count">
           {index + 1} / {THEMES.length}
         </span>
-        <button onClick={() => nudge(1)} aria-label="Next theme">
-          →
-        </button>
         <button
           className="play-btn"
           onClick={() => setPlaying((p) => !p)}
@@ -598,19 +598,9 @@ export default function App() {
         <div className="grid2">
           <ul className="notes">
             <li>
-              <b>One poll.</b> <code>/cluster/resources</code> every 10s for the list
-              and the LEDs; per-guest <code>/status/current</code> only for the guest
-              on screen, so the panel costs one request while it is closed.
-            </li>
-            <li>
               <b>Keyboard-first.</b> <code>j/k</code> move, <code>l</code> or Enter
               descends, <code>h</code> or Escape comes back and restores the cursor.{" "}
               <code>/</code> searches name, vmid, node or OS.
-            </li>
-            <li>
-              <b>Needs attention is absent when nothing is wrong,</b> so its presence is
-              the signal. Alerts name the guest, because a count of broken things is not
-              actionable.
             </li>
             <li>
               <b>Status without hue.</b> LEDs use form and brightness rather than
