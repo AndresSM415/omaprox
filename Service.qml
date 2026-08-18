@@ -300,6 +300,16 @@ Item {
       var response = Api.parseResponse(text)
       if (!response.ok) {
         root.lastError = label + ": " + response.error
+        // A rejected token means the guests and nodes on screen belong to
+        // whatever the token last worked against, which is no longer
+        // provably this host — pointing the same address at a different
+        // install (a rebuilt node, a restored one, one entered by hand while
+        // testing) leaves the old cluster's data on screen looking exactly
+        // as current as it did a moment ago. Any other failure — the network
+        // down for one poll, a timeout — leaves the list alone: the data is
+        // just old, not wrong, and clearing it on every blip would empty the
+        // panel over a single flaky refresh.
+        if (response.auth) root.clearClusterData()
         if (onFail) onFail()
         return
       }
@@ -317,6 +327,18 @@ Item {
     case 60: return "TLS rejected — Proxmox self-signs, so leave certificate verification Off or point caCert at your CA"
     }
     return errorText !== "" ? errorText : "curl exited " + exitCode
+  }
+
+  // Everything the last successful poll produced. Called only when a token is
+  // rejected outright — see `handle()` — because that is the one failure that
+  // means the data is not merely old but no longer known to belong to this
+  // host at all.
+  function clearClusterData() {
+    root.guests = []
+    root.nodes = []
+    root.configs = ({})
+    root.agentAddresses = ({})
+    root._configQueue = []
   }
 
   function refresh() {
