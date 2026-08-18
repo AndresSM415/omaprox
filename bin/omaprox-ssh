@@ -2,7 +2,7 @@
 # Open an SSH console, setting up key authentication the first time so there is
 # never a password prompt again.
 #
-#   omaprox-ssh <user> <host> [command...]
+#   omaprox-ssh [--vmid N --guess NAME] <user> <host> [command...]
 #
 # Deliberately does NOT store an SSH password anywhere. A stored password is a
 # worse version of the thing SSH already solves properly: an authorized key is
@@ -12,16 +12,72 @@
 #
 # Answer no and it simply connects; you will be asked for a password each time,
 # which is the same behaviour as before.
+#
+# `--vmid`/`--guess` are only ever passed for a guest's own address (the `pct
+# enter`/node calls never pass them, and target the node directly — they never
+# need any of this). An empty `<host>` alongside them means the panel could not
+# resolve a real address and this is being asked for one, once, to remember.
 
 set -uo pipefail
+
+VMID=""
+GUESS=""
+while [[ ${1:-} == --* ]]; do
+  case $1 in
+    --vmid) VMID=${2:-}; shift 2 ;;
+    --guess) GUESS=${2:-}; shift 2 ;;
+    *) break ;;
+  esac
+done
 
 USER_NAME=${1:-root}
 HOST=${2:-}
 shift 2 2>/dev/null || true
 REMOTE_COMMAND=("$@")
 
+ADDRESSES_FILE=${XDG_CONFIG_HOME:-$HOME/.config}/omaprox/addresses
+
+# `vmid = address`, one per line, the same `key = value` shape as the token
+# file. Proxmox enforces cluster-wide unique vmids, so the vmid alone is
+# enough to key on — no need to also track which node or guest type.
+lookup_address() {
+  [[ -n $VMID && -f $ADDRESSES_FILE ]] || return 1
+  local v
+  v=$(sed -n "s/^[[:space:]]*${VMID}[[:space:]]*=[[:space:]]*//p" "$ADDRESSES_FILE" | tail -1)
+  [[ -n $v ]] || return 1
+  printf '%s' "$v"
+}
+
+store_address() {
+  [[ -n $VMID ]] || return 0
+  mkdir -p "$(dirname "$ADDRESSES_FILE")"
+  local tmp
+  tmp=$(mktemp "${ADDRESSES_FILE}.XXXXXX")
+  { [[ -f $ADDRESSES_FILE ]] && grep -vE "^[[:space:]]*${VMID}[[:space:]]*=" "$ADDRESSES_FILE"
+    printf '%s = %s\n' "$VMID" "$1"; } >"$tmp"
+  mv "$tmp" "$ADDRESSES_FILE"
+}
+
+if [[ -z $HOST && -n $VMID ]]; then
+  HOST=$(lookup_address) || HOST=""
+  if [[ -z $HOST ]]; then
+    echo
+    echo "  No known address for ${GUESS:-this guest} (vmid $VMID)."
+    echo "  Asked once, then remembered in $ADDRESSES_FILE."
+    echo "  (Press F on the guest to be asked again.)"
+    echo
+    read -rp "  Address or hostname: " HOST
+    if [[ -z $HOST ]]; then
+      HOST=$GUESS
+      echo "  Using '$HOST' — that may not resolve to anything."
+    fi
+    echo
+    store_address "$HOST"
+  fi
+fi
+
 if [[ -z $HOST ]]; then
-  echo "usage: omaprox-ssh <user> <host> [command...]" >&2
+  echo "usage: omaprox-ssh [--vmid N --guess NAME] <user> <host> [command...]" >&2
   exit 2
 fi
 

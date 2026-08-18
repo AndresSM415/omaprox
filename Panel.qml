@@ -402,6 +402,7 @@ Panel {
         guests: pve.guests.length,
         configsCached: Object.keys(pve.configs).length,
         agentAddresses: Object.keys(pve.agentAddresses).length,
+        resolvedAddresses: Object.keys(pve.resolvedAddresses).length,
         alarms: pve.alarms,
         selectedKey: pve.selectedKey,
         selectedAddress: pve.selectedAddress,
@@ -497,6 +498,7 @@ Panel {
         else if (t === "t") root.openConsole()
         else if (t === "o") root.openWebUi()
         else if (t === "c") root.copyCurrent()
+        else if (t === "F") pve.forgetCredentials(root.actionGuest)
       }
 
       // Header pinned to the top, legend pinned to the bottom, list filling
@@ -579,7 +581,14 @@ Panel {
         text: {
           if (!pve.configured) return "r retry   esc close"
           if (root.inNode) return "j/k move   h back   t console   o web ui   c copy   r refresh"
-          if (root.inGuest) return "j/k move   h back   t console   o web ui   c copy   r refresh"
+          if (root.inGuest) {
+            // F only means anything for a QEMU guest — a container's console
+            // always targets its node, so there is no saved address or
+            // credential of its own to forget.
+            var isQemu = pve.selectedGuest && pve.selectedGuest.type === "qemu"
+            return "j/k move   h back   t console   o web ui   c copy"
+              + (isQemu ? "   F forget" : "") + "   r refresh"
+          }
           return "j/k move   ⏎ stats   t console   o web ui   / search   r refresh"
         }
         color: root.dim

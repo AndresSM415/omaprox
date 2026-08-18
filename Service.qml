@@ -79,7 +79,8 @@ Item {
   readonly property string selectedAddress: {
     var guest = selectedGuest
     if (!guest) return ""
-    return Api.consoleAddress(guest, selectedConfig, agentAddresses[selectedKey] || "", addressOverrides)
+    return Api.resolveAddress(guest, selectedConfig, agentAddresses[selectedKey] || "",
+      addressOverrides, resolvedAddresses).address
   }
 
   // --- status --------------------------------------------------------------
@@ -140,6 +141,17 @@ Item {
     var value = setting("addresses", null)
     return value && typeof value === "object" ? value : ({})
   }
+
+  // Addresses a console helper resolved by asking, rather than one written by
+  // hand in shell.json. The manual override above always wins if both exist —
+  // this is what fills the gap the first time a VM's address cannot be found
+  // any other way, so the only manual step left is the one prompt itself.
+  readonly property string addressStorePath: {
+    var xdg = Quickshell.env("XDG_CONFIG_HOME")
+    if (!xdg || xdg === "") xdg = Quickshell.env("HOME") + "/.config"
+    return xdg + "/omaprox/addresses"
+  }
+  property var resolvedAddresses: ({})
 
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
@@ -210,6 +222,26 @@ Item {
       root.credentialHost = ""
       root.credentialError = "no token file at " + root.credentialsPath
     }
+  }
+
+  // Same watcher-on-a-missing-directory hazard as the token file above, and
+  // the same fix: create the directory before the FileView below is built.
+  Process {
+    id: ensureAddressStoreDir
+    running: true
+    command: ["mkdir", "-p", root.addressStorePath.slice(0, root.addressStorePath.lastIndexOf("/"))]
+  }
+
+  FileView {
+    id: addressStoreFile
+    path: root.addressStorePath
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.resolvedAddresses = Api.parseAddressStore(text())
+    // Absence is the normal state until the first console helper writes to
+    // it — nothing to report, just nothing stored yet.
+    onLoadFailed: root.resolvedAddresses = ({})
   }
 
   // Belt and suspenders for the watcher gap above: even with the directory
@@ -537,7 +569,9 @@ Item {
 
     var key = Model.guestKey(guest)
     var config = configs[key] || null
-    var address = Api.consoleAddress(guest, config, agentAddresses[key] || "", addressOverrides)
+    var resolved = Api.resolveAddress(guest, config, agentAddresses[key] || "",
+      addressOverrides, resolvedAddresses)
+    var address = resolved.address
     var values = {
       vmid: guest.vmid, name: guest.name, node: guest.node, address: address,
       // The bare address the API is reached on, for setups whose node names do
@@ -582,14 +616,22 @@ Item {
       var rdpTemplate = String(setting("rdpCommand", "") || "").trim()
       if (rdpTemplate === "") {
         // Straight to the helper with no terminal wrapped around it. When it
-        // already has the credentials nothing appears but the desktop; when it
-        // does not, it opens its own terminal to ask and closes it again once
-        // the session starts. Wrapping it here would put a terminal on screen
-        // every time, including the times it has nothing to say.
+        // already has the address and credentials nothing appears but the
+        // desktop; when it does not have either, it opens its own terminal to
+        // ask — address first, then credentials if those are also unknown —
+        // and closes it again once the session starts. Wrapping it here would
+        // put a terminal on screen every time, including the times it has
+        // nothing to say.
+        //
+        // An unconfirmed address is handed over as an empty string rather than
+        // the guessed guest name: that guess is exactly what used to be tried
+        // silently and fail, and passing it through would give the helper no
+        // way to tell a real address from a hopeful one.
         Quickshell.execDetached([
-          helperPath("omaprox-rdp"), address, guest.name
+          helperPath("omaprox-rdp"), "--vmid", String(guest.vmid),
+          resolved.known ? address : "", guest.name
         ].concat(rdpUser !== "" ? ["/u:" + rdpUser] : []))
-        flashStatus("RDP: " + address)
+        flashStatus(resolved.known ? "RDP: " + address : "RDP: " + guest.name + " — resolving address")
         return
       }
 
@@ -604,11 +646,50 @@ Item {
     var vmTemplate = String(setting("vmConsoleCommand", "") || "").trim()
     var vmCommand = vmTemplate !== ""
       ? Api.renderCommand(vmTemplate, values)
+      // This one runs in a terminal already (unlike the RDP path above), so
+      // there is no no-tty relaunch to arrange — an unresolved address is
+      // simply asked for inline, the same terminal the console itself opens
+      // in.
       : Util.shellQuote(helperPath("omaprox-ssh"))
+        + " --vmid " + Util.shellQuote(String(guest.vmid))
+        + " --guess " + Util.shellQuote(guest.name)
         + " " + Util.shellQuote(guestSshUser)
-        + " " + Util.shellQuote(address)
+        + " " + Util.shellQuote(resolved.known ? address : "")
     runInTerminal(vmCommand, title)
     flashStatus("Console: " + guest.name)
+  }
+
+  // "Restore the prompts": drop whatever a console helper resolved or saved
+  // for this guest, so the next connection asks from scratch instead of
+  // reusing an address or password that turned out to be wrong. Only QEMU
+  // guests have anything to forget — a container's console always targets
+  // its node, never the guest itself, so there is no per-guest address or
+  // credential riding on it.
+  function forgetCredentials(guest) {
+    if (!guest || guest.type !== "qemu") {
+      flashStatus("Nothing to forget here")
+      return
+    }
+    if (forgetReq.running) return
+    var key = Model.guestKey(guest)
+    var config = configs[key] || null
+    var address = Api.resolveAddress(guest, config, agentAddresses[key] || "",
+      addressOverrides, resolvedAddresses).address
+    forgetReq.command = [helperPath("omaprox-forget"), String(guest.vmid), address]
+    forgetReq.guestName = guest.name
+    forgetReq.running = true
+  }
+
+  Process {
+    id: forgetReq
+    property string guestName: ""
+    stdout: StdioCollector { id: forgetOut; waitForEnd: true }
+    onExited: function() {
+      var said = String(forgetOut.text || "").trim()
+      root.flashStatus(said.indexOf("forgot") === 0
+        ? "Forgot " + forgetReq.guestName + " — you will be asked again"
+        : "Nothing was stored for " + forgetReq.guestName)
+    }
   }
 
   // Scripts ship next to the QML, so the plugin stays a self-contained checkout

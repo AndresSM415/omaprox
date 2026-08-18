@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
-# Open a remote desktop, asking for credentials once and remembering them.
+# Open a remote desktop, asking for an address and credentials once each and
+# remembering both.
 #
-#   omaprox-rdp <address> <label> [extra xfreerdp args...]
+#   omaprox-rdp [--vmid N] <address> <label> [extra xfreerdp args...]
 #
 # Run with no terminal attached (which is how the bar launches it) this is
-# silent when it already knows the credentials: the desktop opens and no
-# terminal ever appears. Only when it has nothing saved, or what it had is
-# refused, does it open a terminal to ask — and that terminal closes once the
-# session is up, rather than sitting behind the desktop for the rest of it.
+# silent when it already knows the address and the credentials: the desktop
+# opens and no terminal ever appears. Only when something is missing, or a
+# saved credential is refused, does it open a terminal to ask — and that
+# terminal closes once the session is up, rather than sitting behind the
+# desktop for the rest of it.
+#
+# `<address>` may be empty when `--vmid` is given, meaning the panel could not
+# resolve a real one and this is being asked for it, once, to remember. The
+# vmid is what the answer is filed under: Proxmox keeps vmids unique across
+# the whole cluster, so it is enough on its own.
 #
 # Credentials live in the login keyring via libsecret, never in shell.json and
 # never on the command line: FreeRDP is handed its arguments with /args-from
@@ -16,14 +23,51 @@
 
 set -uo pipefail
 
+VMID=""
+while [[ ${1:-} == --* ]]; do
+  case $1 in
+    --vmid) VMID=${2:-}; shift 2 ;;
+    *) break ;;
+  esac
+done
+
 ADDRESS=${1:-}
 LABEL=${2:-${1:-}}
 shift 2 2>/dev/null || true
 EXTRA_ARGS=("$@")
 
-if [[ -z $ADDRESS ]]; then
-  echo "usage: omaprox-rdp <address> <label> [xfreerdp args...]" >&2
+if [[ -z $ADDRESS && -z $VMID ]]; then
+  echo "usage: omaprox-rdp [--vmid N] <address> <label> [xfreerdp args...]" >&2
   exit 2
+fi
+
+ADDRESSES_FILE=${XDG_CONFIG_HOME:-$HOME/.config}/omaprox/addresses
+
+# `vmid = address`, one per line — the same store bin/omaprox-ssh writes to and
+# the same `key = value` shape as the token file.
+lookup_address() {
+  [[ -n $VMID && -f $ADDRESSES_FILE ]] || return 1
+  local v
+  v=$(sed -n "s/^[[:space:]]*${VMID}[[:space:]]*=[[:space:]]*//p" "$ADDRESSES_FILE" | tail -1)
+  [[ -n $v ]] || return 1
+  printf '%s' "$v"
+}
+
+store_address() {
+  [[ -n $VMID ]] || return 0
+  mkdir -p "$(dirname "$ADDRESSES_FILE")"
+  local tmp
+  tmp=$(mktemp "${ADDRESSES_FILE}.XXXXXX")
+  { [[ -f $ADDRESSES_FILE ]] && grep -vE "^[[:space:]]*${VMID}[[:space:]]*=" "$ADDRESSES_FILE"
+    printf '%s = %s\n' "$VMID" "$1"; } >"$tmp"
+  mv "$tmp" "$ADDRESSES_FILE"
+}
+
+# Fill in from the store before anything else runs, so a vmid that has already
+# been resolved once behaves exactly like an address the panel knew outright —
+# including staying silent through the no-terminal path below.
+if [[ -z $ADDRESS && -n $VMID ]]; then
+  ADDRESS=$(lookup_address) || ADDRESS=""
 fi
 
 command -v xfreerdp3 >/dev/null 2>&1 || {
@@ -34,11 +78,25 @@ command -v xfreerdp3 >/dev/null 2>&1 || {
 HAVE_KEYRING=0
 command -v secret-tool >/dev/null 2>&1 && HAVE_KEYRING=1
 
-SCHEMA=(service omaprox host "$ADDRESS")
+SCHEMA=()
+LEGACY_SCHEMA=()
+
+# The keyring key names the address, and the address can now be resolved after
+# this script has already started — the terminal-mode prompt below fills in
+# an ADDRESS that was empty when the script was invoked. SCHEMA cannot be a
+# plain assignment made once near the top the way it used to be: computed
+# before that prompt runs, it would freeze in the empty string, and every
+# credential lookup and save for the rest of the run would silently miss.
+# Called once, right after ADDRESS is settled for good, in every path that
+# reaches the functions below.
+#
 # The plugin was first published as "proxmarchy", so a credential saved before
 # the rename lives under that service name. Look both up; anything found in the
 # old one is migrated over on success so the rename never orphans it.
-LEGACY_SCHEMA=(service proxmarchy host "$ADDRESS")
+set_schema() {
+  SCHEMA=(service omaprox host "$ADDRESS")
+  LEGACY_SCHEMA=(service proxmarchy host "$ADDRESS")
+}
 
 # `secret-tool search` splits its output: label and secret to stdout, the
 # attributes to stderr. Discarding stderr loses the very fields being read;
@@ -193,21 +251,28 @@ ask() {
 # ---------------------------------------------------------------- no terminal
 
 # Launched from the bar: stdin is not a tty. Succeed silently if possible,
-# otherwise re-launch inside a terminal that can ask.
+# otherwise re-launch inside a terminal that can ask — for the address, for
+# credentials, or both, whichever this run is still missing.
 if [[ ! -t 0 ]]; then
-  PASSWORD=$(lookup_password) || PASSWORD=""
-  if [[ -n $PASSWORD ]]; then
-    USERNAME=$(attribute username) || USERNAME=""
-    DOMAIN=$(attribute domain) || DOMAIN=""
-    launch_watched "$USERNAME" "$PASSWORD" "$DOMAIN"
-    case $? in
-      0) remember "$USERNAME" "$DOMAIN" "$PASSWORD"; exit 0 ;; # connected, migrate any legacy entry
-      2) ;;                 # host down — fall through so the terminal says so
-      *) forget ;;          # refused — stop trying them and ask again
-    esac
+  if [[ -n $ADDRESS ]]; then
+    set_schema
+    PASSWORD=$(lookup_password) || PASSWORD=""
+    if [[ -n $PASSWORD ]]; then
+      USERNAME=$(attribute username) || USERNAME=""
+      DOMAIN=$(attribute domain) || DOMAIN=""
+      launch_watched "$USERNAME" "$PASSWORD" "$DOMAIN"
+      case $? in
+        0) remember "$USERNAME" "$DOMAIN" "$PASSWORD"; exit 0 ;; # connected, migrate any legacy entry
+        2) ;;                 # host down — fall through so the terminal says so
+        *) forget ;;          # refused — stop trying them and ask again
+      esac
+    fi
   fi
 
-  quoted=$(printf '%q ' "$0" "$ADDRESS" "$LABEL" ${EXTRA_ARGS+"${EXTRA_ARGS[@]}"})
+  vmid_args=()
+  [[ -n $VMID ]] && vmid_args=(--vmid "$VMID")
+  quoted=$(printf '%q ' "$0" ${vmid_args[@]+"${vmid_args[@]}"} "$ADDRESS" "$LABEL" \
+    ${EXTRA_ARGS+"${EXTRA_ARGS[@]}"})
   exec setsid uwsm-app -- xdg-terminal-exec \
     --app-id=org.omarchy.terminal \
     --title="$LABEL  ·  sign in" \
@@ -215,6 +280,23 @@ if [[ ! -t 0 ]]; then
 fi
 
 # ---------------------------------------------------------------- terminal
+
+if [[ -z $ADDRESS ]]; then
+  echo
+  echo "  No known address for $LABEL (vmid $VMID)."
+  echo "  Asked once, then remembered in $ADDRESSES_FILE."
+  echo "  (Press F on the guest to be asked again.)"
+  echo
+  read -rp "  Address or hostname: " ADDRESS
+  if [[ -z $ADDRESS ]]; then
+    echo "  No address entered — nothing to connect to." >&2
+    exit 2
+  fi
+  echo
+  store_address "$ADDRESS"
+fi
+
+set_schema
 
 ((HAVE_KEYRING)) || echo "  secret-tool not found — credentials cannot be saved."
 
@@ -236,17 +318,13 @@ for attempt in 1 2 3; do
       ;;
     2)
       echo "cannot reach $ADDRESS"
-      if [[ $ADDRESS != *.* && $ADDRESS != *:* ]]; then
-        # A bare name means the panel had no real address and fell back to the
-        # guest's name. That is almost always a missing address override, not a
-        # broken network.
-        echo
-        echo "  $ADDRESS does not resolve. If the guest has a fixed IP, give the"
-        echo "  panel an address override in ~/.config/omarchy/shell.json:"
-        echo '    { "id": "io.github.andressm415.omaprox", "addresses": { "<vmid>": "<ip>" } }'
-        echo "  (README → Configure)."
-      fi
       echo
+      if [[ -n $VMID ]]; then
+        echo "  Wrong address? Press F on this guest to be asked again, or set a"
+        echo "  fixed one yourself in ~/.config/omarchy/shell.json:"
+        echo '    { "id": "io.github.andressm415.omaprox", "addresses": { "'"$VMID"'": "<ip>" } }'
+        echo
+      fi
       read -rp "  press enter to close "
       exit 1
       ;;

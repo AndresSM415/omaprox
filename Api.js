@@ -369,12 +369,35 @@ function readAgentAddress(raw) {
 // override, then whatever the guest itself told us, then the guest's name —
 // which is a working hostname on any network with sane DNS, and a clearer
 // failure than an empty string when it is not.
-function consoleAddress(guest, config, agentAddress, overrides) {
+// The vmid=address lines a console helper writes to ~/.config/omaprox/addresses
+// the first time it has to ask, in the same `key = value` style as the token
+// file. One vmid per line is enough — Proxmox enforces cluster-wide unique
+// vmids, so there is no need to also key on node or guest type.
+function parseAddressStore(text) {
+  var out = {};
+  var lines = String(text || "").split("\n");
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim();
+    if (line === "" || line.charAt(0) === "#") continue;
+    var pair = line.match(/^(\d+)\s*=\s*(.+)$/);
+    if (pair) out[pair[1]] = pair[2].trim();
+  }
+  return out;
+}
+
+// The full picture: the address to use, and whether anything real backed it
+// up. `known: false` means every source came up empty and this is the guest's
+// own name, offered as a last resort rather than confirmed to reach anything —
+// that distinction is what tells a console helper whether to just connect or
+// to ask first.
+function resolveAddress(guest, config, agentAddress, overrides, stored) {
   var override = overrides ? overrides[String(guest.vmid)] : "";
-  if (override) return String(override);
-  if (config && config.address) return String(config.address);
-  if (agentAddress) return String(agentAddress);
-  return String(guest.name || "");
+  if (override) return { address: String(override), known: true };
+  if (config && config.address) return { address: String(config.address), known: true };
+  if (agentAddress) return { address: String(agentAddress), known: true };
+  var remembered = stored ? stored[String(guest.vmid)] : "";
+  if (remembered) return { address: String(remembered), known: true };
+  return { address: String(guest.name || ""), known: false };
 }
 
 // These are what a hand-written override would look like, and what the README
