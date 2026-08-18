@@ -91,6 +91,29 @@ Item {
   property bool rdpAvailable: true
 
   readonly property bool busy: refreshing || statusRefreshing
+
+  // What the icons actually dim on. `busy` flips true and back on every poll,
+  // and against a cluster on the same network that round trip is a few
+  // milliseconds — so binding an animated opacity straight to it blinks the
+  // bar icon and the hero mark on every refresh while telling you nothing you
+  // did not already know. A refresh only becomes worth reporting once it is
+  // slow enough that you would otherwise wonder whether the panel is stuck.
+  property bool busySlow: false
+
+  Timer {
+    id: busyDelay
+    interval: 700
+    onTriggered: root.busySlow = root.busy
+  }
+
+  onBusyChanged: {
+    if (busy) {
+      busyDelay.restart()
+    } else {
+      busyDelay.stop()
+      busySlow = false
+    }
+  }
   readonly property int alarms: Model.alarmCount(modelState())
   readonly property int running: Model.runningCount(guests)
   readonly property bool warning: alarms > 0 || lastError !== ""
