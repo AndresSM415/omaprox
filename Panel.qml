@@ -739,6 +739,9 @@ Panel {
     readonly property real target: Util.clamp(Number(percent) || 0, 0, 1)
     property real fill: 0
     property bool seeded: false
+    // The key `fill` currently reflects, so re-seeding happens once per key
+    // rather than on every ordinary glide toward a new target.
+    property string seededKey: ""
 
     implicitHeight: Math.max(Style.space(4), Math.round(Style.spacing.controlHeight * 0.14))
 
@@ -774,14 +777,35 @@ Panel {
     // at 40%, so it starts at zero and sweeps up, all of them together. The
     // panel remembers the last level per key, so a rebuilt bar can start where
     // its predecessor stopped and simply glide to the new reading.
-    Component.onCompleted: {
-      var remembered = meter.mkey !== "" ? root.meterValues[meter.mkey] : undefined
-      meter.fill = remembered !== undefined ? remembered : meter.target
+    //
+    // The guest-view meters sit behind a Loader whose `item.row` is attached
+    // by an external Binding a beat after this Item is constructed (see
+    // `rowLoader` above) — so `percent`/`mkey` read 0/"" at construction and
+    // only become real once that Binding fires. Seeding straight from
+    // Component.onCompleted therefore seeds from that placeholder, locks
+    // fill at 0, and then animates up when the real value lands a moment
+    // later — the exact zero-flash this is meant to prevent. Qt.callLater
+    // defers the seed until the current update cascade has fully settled, so
+    // percent, level and mkey are all real by the time it runs.
+    function reseed() {
+      if (meter.mkey === "" || meter.mkey === meter.seededKey) return
+      meter.seededKey = meter.mkey
+      var remembered = root.meterValues[meter.mkey]
+      var start = remembered !== undefined ? remembered : meter.target
+      meter.seeded = false
+      meter.fill = start
       meter.seeded = true
       meter.fill = meter.target
     }
 
-    onTargetChanged: if (meter.seeded) meter.fill = meter.target
+    onMkeyChanged: Qt.callLater(reseed)
+    Component.onCompleted: Qt.callLater(reseed)
+
+    // Ordinary updates once already seeded to this key: glide to the new
+    // reading. Guarded on seededKey so a target that lands before the
+    // deferred reseed has run — still attributed to the "" placeholder key —
+    // cannot jump the bar ahead of the seed.
+    onTargetChanged: if (meter.seeded && meter.mkey === meter.seededKey) meter.fill = meter.target
 
     // Recorded continuously rather than only at the end, so a delegate torn
     // down mid-sweep is replaced by one that resumes from the same place.
