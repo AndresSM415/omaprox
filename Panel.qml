@@ -54,10 +54,6 @@ Panel {
   readonly property bool inGuest: pve.selectedKey !== "" && filter === ""
   readonly property bool inNode: pve.selectedNode !== null && filter === ""
 
-  // The last width each meter drew, keyed by the row's stable key, so a meter
-  // rebuilt on the next poll can glide from where it was instead of sweeping
-  // up from zero.
-  property var meterValues: ({})
 
   readonly property var rows: {
     if (!pve.credentialsLoaded) return []
@@ -344,7 +340,11 @@ Panel {
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
-  onOpenedChanged: if (opened) {
+  // Nothing re-reads the cluster on its own while you are looking at it; `r`
+  // does that. The poll resumes, and fires once immediately, on the way out.
+  onOpenedChanged: {
+    pve.pollPaused = opened
+    if (!opened) return
     cursorActive = false
     cursorIndex = 0
     overviewCursor = 0
@@ -744,22 +744,15 @@ Panel {
 
   // A thin meter. Shared by node rows and the guest view so a bar means the
   // same thing wherever it appears.
+  // Deliberately not animated. The figures only move when you ask them to now
+  // (see the poll pause below), so a bar has nothing to glide between — and
+  // every attempt to animate across a rebuilt delegate cost more in flicker
+  // than the motion was worth. The seeded-and-remembered version is kept on
+  // the `smooth-meters` branch if it is ever wanted back.
   component Meter: Item {
     id: meter
-
-    // Bind these three; everything else is internal.
     property real percent: 0
     property string level: "ok"
-    // Stable identity for this bar across polls. Without one the meter cannot
-    // know where it last stood, and animates from zero every time.
-    property string mkey: ""
-
-    readonly property real target: Util.clamp(Number(percent) || 0, 0, 1)
-    property real fill: 0
-    property bool seeded: false
-    // The key `fill` currently reflects, so re-seeding happens once per key
-    // rather than on every ordinary glide toward a new target.
-    property string seededKey: ""
 
     implicitHeight: Math.max(Style.space(4), Math.round(Style.spacing.controlHeight * 0.14))
 
@@ -775,59 +768,13 @@ Panel {
       anchors.verticalCenter: meterTrack.verticalCenter
       height: meterTrack.height
       radius: meterTrack.radius
-      width: meterTrack.width * meter.fill
+      width: meterTrack.width * Util.clamp(Number(meter.percent) || 0, 0, 1)
       // Warn is the same colour at reduced strength rather than a second hue,
       // so a filling meter reads as "on the way there" instead of as a
       // different kind of problem.
       color: meter.level === "crit" ? root.urgent
         : (meter.level === "warn" ? Util.alpha(root.urgent, 0.75) : root.foreground)
     }
-
-    // Only animates once the bar has been seeded, so the jump to the
-    // remembered level on creation is instant and invisible.
-    Behavior on fill {
-      enabled: meter.seeded
-      NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
-    }
-
-    // Every poll rebuilds the row model, which destroys and rebuilds these
-    // delegates — a fresh meter has no idea the same bar was already on screen
-    // at 40%, so it starts at zero and sweeps up, all of them together. The
-    // panel remembers the last level per key, so a rebuilt bar can start where
-    // its predecessor stopped and simply glide to the new reading.
-    //
-    // The guest-view meters sit behind a Loader whose `item.row` is attached
-    // by an external Binding a beat after this Item is constructed (see
-    // `rowLoader` above) — so `percent`/`mkey` read 0/"" at construction and
-    // only become real once that Binding fires. Seeding straight from
-    // Component.onCompleted therefore seeds from that placeholder, locks
-    // fill at 0, and then animates up when the real value lands a moment
-    // later — the exact zero-flash this is meant to prevent. Qt.callLater
-    // defers the seed until the current update cascade has fully settled, so
-    // percent, level and mkey are all real by the time it runs.
-    function reseed() {
-      if (meter.mkey === "" || meter.mkey === meter.seededKey) return
-      meter.seededKey = meter.mkey
-      var remembered = root.meterValues[meter.mkey]
-      var start = remembered !== undefined ? remembered : meter.target
-      meter.seeded = false
-      meter.fill = start
-      meter.seeded = true
-      meter.fill = meter.target
-    }
-
-    onMkeyChanged: Qt.callLater(reseed)
-    Component.onCompleted: Qt.callLater(reseed)
-
-    // Ordinary updates once already seeded to this key: glide to the new
-    // reading. Guarded on seededKey so a target that lands before the
-    // deferred reseed has run — still attributed to the "" placeholder key —
-    // cannot jump the bar ahead of the seed.
-    onTargetChanged: if (meter.seeded && meter.mkey === meter.seededKey) meter.fill = meter.target
-
-    // Recorded continuously rather than only at the end, so a delegate torn
-    // down mid-sweep is replaced by one that resumes from the same place.
-    onFillChanged: if (meter.mkey !== "") root.meterValues[meter.mkey] = meter.fill
   }
 
   // A guest: console button, LED, vmid, name over a status line, and the
@@ -1013,7 +960,6 @@ Panel {
             width: parent.width - meterLabel.width - meterValue.width - Style.space(16)
             percent: Number(modelData.percent) || 0
             level: String(modelData.level || "ok")
-            mkey: String(modelData.key || "")
           }
 
           Text {
@@ -1078,7 +1024,6 @@ Panel {
         width: parent.width
         percent: meterEntry.row ? Number(meterEntry.row.percent) || 0 : 0
         level: meterEntry.row ? String(meterEntry.row.level || "ok") : "ok"
-        mkey: meterEntry.row ? String(meterEntry.row.key || "") : ""
       }
 
       Text {

@@ -678,11 +678,23 @@ Item {
 
   // ------------------------------------------------------------- scheduling
 
+  // Polling is for the bar icon, which has to stay honest about what is running
+  // while you are not looking. With the panel open the figures are being read
+  // rather than glanced at, and having them rewrite themselves underneath you —
+  // rows resorting, meters jumping, the cursor row rebuilding — is worse than
+  // them being a minute old. So the poll stops while the panel is open and `r`
+  // becomes the way to update. Opening a guest or a node still fetches its
+  // detail once, on the way in.
+  //
+  // `triggeredOnStart` means closing the panel refreshes immediately rather
+  // than leaving the bar stale for another interval.
+  property bool pollPaused: false
+
   Timer {
     id: pollTimer
     interval: root.refreshIntervalSec * 1000
     repeat: true
-    running: true
+    running: !root.pollPaused
     triggeredOnStart: true
     onTriggered: root.refresh()
   }
