@@ -63,6 +63,40 @@ Panel {
     return Model.buildRows(state)
   }
 
+  // Keep one model object alive across polls. A JavaScript array assigned
+  // directly to ListView is a wholesale model replacement every time live
+  // data changes; reconciling by the rows' stable keys lets delegates update
+  // in place instead.
+  ListModel {
+    id: rowModel
+    dynamicRoles: true
+  }
+
+  function reconcileRows() {
+    var desired = root.rows
+
+    for (var target = 0; target < desired.length; target++) {
+      var wanted = desired[target]
+      var found = -1
+      for (var existing = target; existing < rowModel.count; existing++) {
+        if (rowModel.get(existing).rowKey === wanted.key) {
+          found = existing
+          break
+        }
+      }
+
+      if (found < 0) {
+        rowModel.insert(target, { rowKey: wanted.key, rowData: wanted })
+      } else {
+        if (found !== target) rowModel.move(found, target, 1)
+        rowModel.setProperty(target, "rowData", wanted)
+      }
+    }
+
+    if (rowModel.count > desired.length)
+      rowModel.remove(desired.length, rowModel.count - desired.length)
+  }
+
   readonly property var currentRow: rows.length > 0 && cursorIndex >= 0 && cursorIndex < rows.length
     ? rows[cursorIndex] : null
 
@@ -312,7 +346,12 @@ Panel {
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
-  onRowsChanged: clampCursor()
+  onRowsChanged: {
+    clampCursor()
+    reconcileRows()
+  }
+
+  Component.onCompleted: reconcileRows()
 
   Service {
     id: pve
@@ -555,7 +594,7 @@ Panel {
         interactive: contentHeight > height
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-        model: root.rows
+        model: rowModel
         currentIndex: root.cursorIndex
         // Deferred a turn: the model is rebuilt on every poll and on every
         // filter keystroke, and swapping it resets the view out from under an
@@ -567,7 +606,7 @@ Panel {
 
         delegate: Item {
           id: rowItem
-          required property var modelData
+          required property var rowData
           required property int index
 
           width: ListView.view.width
@@ -582,19 +621,19 @@ Panel {
             // padding the separator's own height paints the whole thing, and a
             // 1px rule becomes a nine-pixel slab.
             Item {
-              visible: rowItem.index > 0 && rowItem.modelData.sectionTitle !== ""
+              visible: rowItem.index > 0 && rowItem.rowData.sectionTitle !== ""
               width: 1
               height: Style.space(8)
             }
 
             PanelSeparator {
-              visible: rowItem.index > 0 && rowItem.modelData.sectionTitle !== ""
+              visible: rowItem.index > 0 && rowItem.rowData.sectionTitle !== ""
               foreground: root.foreground
             }
 
             PanelSectionHeader {
-              visible: rowItem.modelData.sectionTitle !== ""
-              text: rowItem.modelData.sectionTitle
+              visible: rowItem.rowData.sectionTitle !== ""
+              text: rowItem.rowData.sectionTitle
               foreground: root.foreground
               fontFamily: root.fontFamily
             }
@@ -603,7 +642,7 @@ Panel {
               id: rowLoader
               width: parent.width
               sourceComponent: {
-                switch (rowItem.modelData.kind) {
+                switch (rowItem.rowData.kind) {
                 case "guest": return guestComponent
                 case "node": return nodeComponent
                 case "meter": return meterComponent
@@ -614,12 +653,12 @@ Panel {
             }
 
             // Bindings rather than assignment in onLoaded: the ListView
-            // recycles delegates, so the item outlives the modelData it was
+            // recycles delegates, so the item outlives the rowData it was
             // first handed and would otherwise render a stale row.
             Binding {
               target: rowLoader.item
               property: "row"
-              value: rowItem.modelData
+              value: rowItem.rowData
               when: rowLoader.item !== null
             }
 
