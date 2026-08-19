@@ -38,6 +38,7 @@
       "vmConsoleCommand": "",
       "rdpCommand": "",
       "memWarnPercent": 90,
+      "showRunningCount": "On",
       "showTemplates": "Off",
       "agentAddresses": "Off"
     },
@@ -135,6 +136,17 @@
         "max": 100,
         "step": 5,
         "defaultValue": 90
+      },
+      {
+        "key": "showRunningCount",
+        "type": "enum",
+        "label": "Show running guest count",
+        "description": "Show the number of running guests beside the Omaprox icon in the bar.",
+        "options": [
+          "Off",
+          "On"
+        ],
+        "defaultValue": "On"
       },
       {
         "key": "showTemplates",

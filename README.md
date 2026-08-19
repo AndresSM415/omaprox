@@ -153,6 +153,7 @@ Everything else lives in the widget's entry in
 | `vmConsoleCommand` | `ssh -t {guestUser}@{address}` | Linux VM console, runs in a floating terminal |
 | `rdpCommand` | `xfreerdp3 /v:{address} /dynamic-resolution +clipboard` | Windows console, launched directly |
 | `memWarnPercent` | 90 | memory share that turns a light red |
+| `showRunningCount` | `On` | show the number of running guests beside the bar icon |
 | `showTemplates` | `Off` | templates never run, so they would be permanently dark rows |
 | `agentAddresses` | `Off` | read VM addresses from the guest agent; needs `VM.Monitor` |
 | `addresses` | — | per-vmid address overrides, keyed by vmid as a string |
