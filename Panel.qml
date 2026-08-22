@@ -1039,10 +1039,13 @@ Panel {
       // count (always cpu + mem) never changes, so the delegates persist and
       // simply re-read their figures through `meter` when the row updates.
       Repeater {
-        model: nodeEntry.row && nodeEntry.row.meters ? nodeEntry.row.meters.length : 0
+        // EXPERIMENT: literal count to isolate whether the length binding
+        // transiently evaluates to 0 during a rowData swap.
+        model: 2
 
         Row {
           id: meterRowSlot
+          objectName: "omaprox-meter-row"
           required property int index
           readonly property var meter: nodeEntry.row && nodeEntry.row.meters
             ? nodeEntry.row.meters[meterRowSlot.index] : null

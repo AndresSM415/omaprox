@@ -134,7 +134,13 @@ function memoryReported(guest) {
   return guest.mem < guest.maxmem * 0.999
 }
 
-function guestHealth(guest, config, thresholds) {
+// A guest hovering at the memory line would otherwise flip its alert row on
+// and off between polls, and every row below it on the overview would jump
+// twice a minute. Once flagged, stay flagged until the share falls this far
+// clear of the threshold.
+var ALARM_CLEAR_BAND = 0.06
+
+function guestHealth(guest, config, thresholds, prevAlarming) {
   var status = String(guest.status || "")
   var locked = String(guest.lock || "")
   var memFraction = guest.maxmem > 0 ? guest.mem / guest.maxmem : 0
@@ -165,7 +171,10 @@ function guestHealth(guest, config, thresholds) {
     return health
   }
 
-  if (status === RUNNING && thresholds.memWarn > 0 && memFraction >= thresholds.memWarn
+  var warnAt = thresholds.memWarn
+  if (prevAlarming && thresholds.memClear > 0 && thresholds.memClear < warnAt)
+    warnAt = thresholds.memClear
+  if (status === RUNNING && warnAt > 0 && memFraction >= warnAt
       && memoryReported(guest)) {
     health.led = "crit"
     health.alarming = true
@@ -189,11 +198,14 @@ function guestHealth(guest, config, thresholds) {
   return health
 }
 
-function nodeHealth(node, thresholds) {
+function nodeHealth(node, thresholds, prevAlarming) {
   var memFraction = node.maxmem > 0 ? node.mem / node.maxmem : 0
   if (String(node.status || "") !== "online")
     return { alarming: true, reason: "node is " + String(node.status || "unknown") }
-  if (thresholds.memWarn > 0 && memFraction >= thresholds.memWarn)
+  var warnAt = thresholds.memWarn
+  if (prevAlarming && thresholds.memClear > 0 && thresholds.memClear < warnAt)
+    warnAt = thresholds.memClear
+  if (warnAt > 0 && memFraction >= warnAt)
     return { alarming: true, reason: formatPercent(memFraction) + " memory" }
   return { alarming: false, reason: "" }
 }
@@ -268,7 +280,8 @@ function splitResources(raw, options) {
 
 function guestRow(guest, state) {
   var config = state.configs[guestKey(guest)] || null
-  var health = guestHealth(guest, config, state.thresholds)
+  var health = guestHealth(guest, config, state.thresholds,
+    !!(state.alarmMemo && state.alarmMemo[guestKey(guest)]))
   var running = guest.status === RUNNING
 
   var os = config ? config.osLabel : ""
@@ -348,6 +361,30 @@ function levelFor(fraction, alarmAt) {
   if (alarmAt > 0 && n >= alarmAt) return "crit"
   if (alarmAt > 0 && n >= alarmAt - 0.15) return "warn"
   return "ok"
+}
+
+// Recomputes the alarming set against current figures, letting previously
+// alarming guests clear only through the hysteresis band. Called once per
+// poll by the service; the panel reads the same memo while shaping rows so
+// the two can never disagree.
+function updateAlarmMemo(state) {
+  var prev = state.alarmMemo || {}
+  var next = {}
+  var i
+
+  for (i = 0; i < state.guests.length; i++) {
+    var g = state.guests[i]
+    var key = guestKey(g)
+    var config = state.configs[key] || null
+    if (guestHealth(g, config, state.thresholds, !!prev[key]).alarming)
+      next[key] = true
+  }
+  for (i = 0; i < state.nodes.length; i++) {
+    var nk = "node/" + state.nodes[i].name
+    if (nodeHealth(state.nodes[i], state.thresholds, !!prev[nk]).alarming)
+      next[nk] = true
+  }
+  return next
 }
 
 // ---------------------------------------------------------------- flattening
@@ -739,12 +776,15 @@ function runningCount(guests) {
 function alarmCount(state) {
   var n = 0
   var i
+  var memo = state.alarmMemo || {}
   for (i = 0; i < state.guests.length; i++) {
-    var config = state.configs[guestKey(state.guests[i])] || null
-    if (guestHealth(state.guests[i], config, state.thresholds).alarming) n++
+    var gk = guestKey(state.guests[i])
+    var config = state.configs[gk] || null
+    if (guestHealth(state.guests[i], config, state.thresholds, !!memo[gk]).alarming) n++
   }
   for (i = 0; i < state.nodes.length; i++)
-    if (nodeHealth(state.nodes[i], state.thresholds).alarming) n++
+    if (nodeHealth(state.nodes[i], state.thresholds,
+        !!memo["node/" + state.nodes[i].name]).alarming) n++
   return n
 }
 

@@ -47,6 +47,9 @@ Item {
   property var guests: []
   property var nodes: []
   property var configs: ({})          // guest key -> Api.readConfig result
+  // Who was alarming as of the last poll. Feeds the hysteresis band; owned
+  // here and updated once per poll so rows shaping stays a pure read.
+  property var alarmMemo: ({})
   property var agentAddresses: ({})   // guest key -> address from the agent
   property var _configQueue: []
 
@@ -125,6 +128,9 @@ Item {
   // shell, so every default is restated here. Changing one means changing both.
   readonly property int refreshIntervalSec: intSetting("refreshIntervalSec", 10, 5, 300)
   readonly property real memWarn: intSetting("memWarnPercent", 90, 50, 100) / 100
+  // Hysteresis: an alarming guest clears only this far below the warn line,
+  // so one hovering at it cannot flip the alert section every poll.
+  readonly property real memClear: Math.max(0, memWarn - Model.ALARM_CLEAR_BAND)
   readonly property bool showRunningCount: boolSetting("showRunningCount", true)
   readonly property bool showTemplates: boolSetting("showTemplates", false)
   readonly property bool smoothMeters: boolSetting("smoothMeters", true)
@@ -185,7 +191,8 @@ Item {
       guestStatus: guestStatus,
       nodeStatus: nodeStatus,
       consoleAddress: selectedAddress,
-      thresholds: { memWarn: memWarn },
+      thresholds: { memWarn: memWarn, memClear: memClear },
+      alarmMemo: alarmMemo,
       showTemplates: showTemplates,
       filter: "",
       emptyMessage: configured ? "No guests on this cluster" : ""
@@ -373,6 +380,7 @@ Item {
     root.configs = ({})
     root.agentAddresses = ({})
     root._configQueue = []
+    root.alarmMemo = ({})
   }
 
   function refresh() {
@@ -384,6 +392,10 @@ Item {
       var split = Model.splitResources(data, { showTemplates: root.showTemplates })
       root.nodes = split.nodes
       root.guests = split.guests
+      // Recompute who is alarming against fresh figures, honouring the clear
+      // band for guests flagged last round. Done here rather than during row
+      // shaping, so the memo never reads and writes inside one binding pass.
+      root.alarmMemo = Model.updateAlarmMemo(root.modelState())
       root.refreshing = false
       root.lastRefreshMs = Date.now()
       root.queueConfigs()
