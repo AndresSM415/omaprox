@@ -38,6 +38,7 @@
       "vmConsoleCommand": "",
       "rdpCommand": "",
       "memWarnPercent": 90,
+      "smoothMeters": "On",
       "showRunningCount": "On",
       "showTemplates": "Off",
       "agentAddresses": "Off"
@@ -136,6 +137,17 @@
         "max": 100,
         "step": 5,
         "defaultValue": 90
+      },
+      {
+        "key": "smoothMeters",
+        "type": "enum",
+        "label": "Smooth meter transitions",
+        "description": "Glide the CPU and memory bars between values instead of snapping to each new figure.",
+        "options": [
+          "Off",
+          "On"
+        ],
+        "defaultValue": "On"
       },
       {
         "key": "showRunningCount",

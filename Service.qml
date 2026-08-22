@@ -127,6 +127,7 @@ Item {
   readonly property real memWarn: intSetting("memWarnPercent", 90, 50, 100) / 100
   readonly property bool showRunningCount: boolSetting("showRunningCount", true)
   readonly property bool showTemplates: boolSetting("showTemplates", false)
+  readonly property bool smoothMeters: boolSetting("smoothMeters", true)
   readonly property bool useAgentAddresses: boolSetting("agentAddresses", false)
   readonly property bool verifyTls: boolSetting("verifyTls", false)
   readonly property string caCert: String(setting("caCert", "") || "").trim()

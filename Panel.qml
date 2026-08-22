@@ -443,6 +443,7 @@ Panel {
         resolvedAddresses: Object.keys(pve.resolvedAddresses).length,
         alarms: pve.alarms,
         showRunningCount: pve.showRunningCount,
+        smoothMeters: pve.smoothMeters,
         selectedKey: pve.selectedKey,
         selectedAddress: pve.selectedAddress,
         statusLoaded: pve.guestStatus.key !== "",
@@ -792,11 +793,9 @@ Panel {
 
   // A thin meter. Shared by node rows and the guest view so a bar means the
   // same thing wherever it appears.
-  // Deliberately not animated. Rows now update in place on every poll, so a
-  // bar redraws at its new value without anything rebuilding around it — and
-  // every attempt to animate across a rebuilt delegate cost more in flicker
-  // than the motion was worth. The seeded-and-remembered version is kept on
-  // the `smooth-meters` branch if gliding is ever wanted back.
+  // Rows persist across polls now, so a meter is one item whose width simply
+  // changes — which means gliding between values costs nothing and flickers
+  // nowhere. Off snaps straight to each new figure, the way it drew before.
   component Meter: Item {
     id: meter
     property real percent: 0
@@ -822,6 +821,10 @@ Panel {
       // different kind of problem.
       color: meter.level === "crit" ? root.urgent
         : (meter.level === "warn" ? Util.alpha(root.urgent, 0.75) : root.foreground)
+      Behavior on width {
+        enabled: pve.smoothMeters
+        NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+      }
     }
   }
 
