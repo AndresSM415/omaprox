@@ -404,6 +404,7 @@ Panel {
         agentAddresses: Object.keys(pve.agentAddresses).length,
         resolvedAddresses: Object.keys(pve.resolvedAddresses).length,
         alarms: pve.alarms,
+        showRunningCount: pve.showRunningCount,
         selectedKey: pve.selectedKey,
         selectedAddress: pve.selectedAddress,
         statusLoaded: pve.guestStatus.key !== "",
@@ -442,7 +443,7 @@ Panel {
         // for. Absent when there is nothing to count, so an unconfigured or
         // empty cluster does not put a lonely 0 on the bar.
         Text {
-          visible: pve.configured && pve.guests.length > 0
+          visible: pve.showRunningCount && pve.configured && pve.guests.length > 0
           anchors.verticalCenter: parent.verticalCenter
           text: String(pve.running)
           color: root.barIconColor

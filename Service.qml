@@ -125,6 +125,7 @@ Item {
   // shell, so every default is restated here. Changing one means changing both.
   readonly property int refreshIntervalSec: intSetting("refreshIntervalSec", 10, 5, 300)
   readonly property real memWarn: intSetting("memWarnPercent", 90, 50, 100) / 100
+  readonly property bool showRunningCount: boolSetting("showRunningCount", true)
   readonly property bool showTemplates: boolSetting("showTemplates", false)
   readonly property bool useAgentAddresses: boolSetting("agentAddresses", false)
   readonly property bool verifyTls: boolSetting("verifyTls", false)
