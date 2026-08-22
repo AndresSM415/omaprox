@@ -101,6 +101,10 @@ and `r` still refreshes on demand when a poll is too far away.
 Mouse: left click toggles the panel, right click refreshes, middle click
 opens the web UI.
 
+**Pin:** press `p` or the pin button at the top of the panel and it stays put —
+outside clicks and a final `esc` are ignored until you unpin, close it from the
+bar icon, or send the IPC `hide`.
+
 **Status lights** use form and brightness rather than colour, so they read
 well in monochrome themes: filled = running, hollow ring = stopped, dimmed =
 paused, red = something needs attention — a running guest over its memory

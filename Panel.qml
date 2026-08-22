@@ -51,6 +51,10 @@ Panel {
   // that makes a drill-down feel like a maze.
   property int overviewCursor: 0
 
+  // Pinned: the panel ignores outside clicks (and a final Escape) and stays
+  // where it is until unpinned or explicitly closed from the bar icon.
+  property bool pinned: false
+
   // Last drawn level per meter key. Node rows render their meters through a
   // Repeater over `row.meters`, and that array is rebuilt on every poll, so
   // those delegates are destroyed and recreated rather than updated in place.
@@ -220,6 +224,23 @@ Panel {
 
   // ------------------------------------------------------------- navigation
 
+  // Outside-click dismissal routes through KeyboardPanel.close() ->
+  // owner.close(), i.e. through here. While pinned it is a no-op; every
+  // explicit close (bar icon toggle, IPC) goes via forceClose() instead.
+  function close() {
+    if (!pinned) controller.hide()
+  }
+
+  function forceClose() {
+    pinned = false
+    controller.hide()
+  }
+
+  function toggle() {
+    if (opened) forceClose()
+    else open()
+  }
+
   function selectableAt(index) {
     if (index < 0 || index >= rows.length) return false
     return rows[index].selectable !== false
@@ -357,6 +378,12 @@ Panel {
 
   // The address is the thing you actually paste somewhere else; the vmid is
   // only ever useful inside Proxmox, where you already are.
+  function togglePin() {
+    pinned = !pinned
+    pve.flashStatus(pinned ? "Pinned — click outside all you like"
+      : "Unpinned — click outside to dismiss")
+  }
+
   function copyCurrent() {
     var row = currentRow
     if (!row) return
@@ -418,9 +445,9 @@ Panel {
   IpcHandler {
     target: root.ipcTarget
     function open(): void { root.open() }
-    function close(): void { root.close() }
+    function close(): void { root.forceClose() }
     function show(): void { root.open() }
-    function hide(): void { root.close() }
+    function hide(): void { root.forceClose() }
     function toggle(): void { root.toggle() }
     function refresh(): string { pve.refresh(); return "ok" }
     function status(): string {
@@ -547,6 +574,7 @@ Panel {
         else if (t === "o") root.openWebUi()
         else if (t === "c") root.copyCurrent()
         else if (t === "F") pve.forgetCredentials(root.actionGuest)
+        else if (t === "p") root.togglePin()
       }
 
       // Header pinned to the top, legend pinned to the bottom, list filling
@@ -559,10 +587,15 @@ Panel {
         anchors.right: parent.right
         spacing: Style.space(10)
 
-        PanelHero {
-          id: hero
+        Item {
+          id: pinRowHost
           width: parent.width
-          title: root.heroTitle
+          height: pinButton.height
+
+          PanelHero {
+            id: hero
+            width: parent.width
+            title: root.heroTitle
           meta: root.heroMeta
           detail: root.heroDetail
           foreground: root.foreground
@@ -577,6 +610,24 @@ Panel {
               warning: pve.configured && pve.alarms > 0
               busy: pve.busySlow
             }
+          }
+          }
+
+          PanelActionButton {
+            id: pinButton
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            iconText: Model.glyphFor("pin")
+            tooltipText: root.pinned
+              ? "Unpin — outside clicks will dismiss"
+              : "Pin — keep the panel open"
+            foreground: root.pinned ? root.foreground : root.dim
+            hoverColor: root.foreground
+            fontFamily: root.fontFamily
+            fontSize: Style.font.bodySmall
+            size: Style.space(20)
+            bordered: root.pinned
+            onClicked: root.togglePin()
           }
         }
 
@@ -637,7 +688,7 @@ Panel {
             return "j/k move   h back   t console   o web ui   c copy"
               + (isQemu ? "   F forget" : "") + "   r refresh"
           }
-          return "j/k move   ⏎ stats   t console   o web ui   / search   r refresh"
+          return "j/k move   ⏎ stats   t console   o web ui   / search   p pin   r refresh"
         }
         color: root.dim
         font.family: root.fontFamily
