@@ -1009,7 +1009,7 @@ Panel {
     // Room for both buttons. Widening the inset rather than overlaying them
     // keeps the name column starting at the same x on every row, which is what
     // makes the list scannable at all.
-    readonly property real consoleInset: Style.space(46)
+    readonly property real consoleInset: Style.space(26)
 
     implicitHeight: entryInner.implicitHeight + Style.spacing.lg
 
@@ -1112,36 +1112,6 @@ Panel {
       onClicked: {
         root.setCursor(entry.rowIndex)
         if (entry.guest) { pve.openConsole(entry.guest); root.close() }
-      }
-    }
-
-    // The guest's page in a browser. Unlike the console this stays live on a
-    // stopped guest — the Proxmox page for a VM that will not boot is exactly
-    // the page you want — so it is never dimmed.
-    PanelActionButton {
-      visible: entry.isGuest
-      anchors.left: consoleButton.right
-      anchors.leftMargin: Style.space(3)
-      anchors.verticalCenter: parent.verticalCenter
-      iconText: Model.glyphFor("web")
-      tooltipText: {
-        if (!entry.row) return ""
-        return entry.hasOwnPage
-          ? "Open " + pve.guestWebUrl(entry.guest)
-          : "Open " + entry.row.name + " in the Proxmox web UI"
-      }
-      // A guest with a page of its own gets the brighter of the two states at
-      // rest: it is the one row in a list of Proxmox links that goes somewhere
-      // else, and that is worth noticing without hovering for it.
-      foreground: entry.hasOwnPage ? root.foreground : root.dim
-      hoverColor: root.foreground
-      fontFamily: root.fontFamily
-      fontSize: Style.font.bodySmall
-      size: Style.space(20)
-      bordered: true
-      onClicked: {
-        root.setCursor(entry.rowIndex)
-        if (entry.guest) { pve.openWebUi(entry.guest); root.close() }
       }
     }
   }
