@@ -105,6 +105,12 @@ opens the web UI.
 outside clicks and a final `esc` are ignored until you unpin, close it from the
 bar icon, or send the IPC `hide`.
 
+While pinned, everything outside the card goes back to being other windows':
+click one and it focuses and takes the keyboard as usual, with the dashboard
+still on screen beside it. Click the card again to drive it with `j`/`k`. The
+one gap is a second monitor — the panel's dismissal surface still covers other
+outputs, so clicks there are swallowed until you unpin.
+
 **Status lights** use form and brightness rather than colour, so they read
 well in monochrome themes: filled = running, hollow ring = stopped, dimmed =
 paused, red = something needs attention — a running guest over its memory

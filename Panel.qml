@@ -549,6 +549,29 @@ Panel {
       headerColumn.implicitHeight + Style.space(18) + list.contentHeight + legend.implicitHeight,
       Style.space(760))
 
+    // While pinned, hand the rest of the screen back to whatever is under it.
+    //
+    // KeyboardPanel's own mask is the whole screen, because that is what makes
+    // outside-click dismissal possible: the overlay has to receive the click
+    // in order to close on it. A pinned panel does not close on it, so all
+    // that fullscreen input region does is swallow every click meant for
+    // another window.
+    //
+    // That swallowing is also why a pinned panel appeared to hold the keyboard
+    // hostage. The layer's steady state is OnDemand focus, and Hyprland moves
+    // keyboard focus off an OnDemand surface when you click a toplevel — but
+    // the click never reached one to be clicked. Nothing was wrong with the
+    // focus mode; the pointer was being intercepted before the compositor was
+    // ever asked to move focus. Narrowing the region to the card fixes both at
+    // once, and the panel then behaves like any other surface: click the card
+    // to drive it with the keyboard, click anything else to type there.
+    mask: Region {
+      x: root.pinned ? panel.cardOrigin.x : 0
+      y: root.pinned ? panel.cardOrigin.y : 0
+      width: root.pinned ? panel.contentWidth : panel.screenW
+      height: root.pinned ? panel.contentHeight : panel.screenH
+    }
+
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent

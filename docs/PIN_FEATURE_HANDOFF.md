@@ -1,47 +1,141 @@
-# Omaprox pin-feature handoff
+# Omaprox pin-feature notes
 
-State of investigation after two implementation attempts. Written for the
-next agent picking this up — everything below was verified empirically
-against a live quickshell harness unless marked as hypothesis.
+The pin feature works. This file was a handoff written after two failed
+attempts; it is kept because the architecture facts in it are hard-won and
+still true, and because one open issue remains. Everything below was verified
+empirically against the running shell on a two-monitor Hyprland session.
 
 ## Goal
 
 A pin control for the bar-widget panel: when pinned, the dashboard stays on
-screen instead of dismissing on outside click, and the user can interact
-with other apps normally (especially typing).
+screen instead of dismissing on outside click, and the user can interact with
+other apps normally (especially typing).
 
-## Current branch state
+## Status
 
-- Branch `feat/pin-panel` (local only, not pushed), HEAD = `cbeef30`.
-- `8af6420` + `cbeef30` = **pin v1, works**: pin button (top-right of hero)
-  and `p` key toggle a `pinned` bool; outside clicks are ignored.
-- The floating-window rewrite (`84feb5a`) **passed all headless tests but is
-  broken in real use**; it was reset away. Details below so it isn't repeated.
-- `develop` = `7c49cac`, contains earlier merged work: smooth meters +
-  `smoothMeters` setting, node-meter persistence fix, alert hysteresis.
-  All shipped features live there; do not regress them.
+- **Done.** Pinned, the panel stays up; clicking another window focuses it and
+  gives it the keyboard; clicking back on the card returns the keyboard to the
+  panel and `j`/`k` work again.
+- **Open:** on a multi-monitor setup, clicks on the *other* monitor are still
+  swallowed while pinned. See "Remaining issue" below. Single-monitor setups
+  are unaffected.
 
-## Architecture facts discovered (verified)
+## What the problem actually was
 
-### 1. How outside-click dismissal works
+The previous two attempts read the symptom as a **keyboard-focus** problem and
+went looking for a host with different focus semantics — hence the
+FloatingWindow rewrite, which passed every headless assertion and was broken in
+real use.
 
-`qs.Ui.KeyboardPanel` (read-only shell component at
-`/usr/share/omarchy/shell/Ui/KeyboardPanel.qml`) implements dismissal with a
-fullscreen MouseArea (`dismissArea`, line ~280) plus per-screen twin windows
-(namespace `omarchy-keyboard-panel-dismiss`). Its close path:
+It was a **pointer** problem.
+
+`qs.Ui.KeyboardPanel` sets its input region to the entire screen:
+
+```qml
+mask: Region {
+  width: root.screenW
+  height: root.screenH
+}
+```
+
+It has to, for the unpinned case: outside-click dismissal only works if the
+overlay actually receives the outside click. But a pinned panel does not
+dismiss, so while pinned that fullscreen region does nothing except swallow
+every click meant for another window.
+
+That is also the whole explanation for the "pinned panel locks the keyboard"
+symptom. The layer's steady state is `WlrKeyboardFocus.OnDemand`, and Hyprland
+*does* move keyboard focus off an OnDemand surface when you click a toplevel —
+but the click was being intercepted before it ever reached a toplevel, so the
+compositor was never asked to move anything. Nothing was wrong with the focus
+mode. The earlier note that this was "inherent to keeping the dashboard as an
+overlay surface" is wrong, and the FloatingWindow direction it justified is
+unnecessary.
+
+## The fix
+
+Six lines in `Panel.qml`, on the existing `KeyboardPanel` host — the instance's
+binding overrides the component's own:
+
+```qml
+mask: Region {
+  x: root.pinned ? panel.cardOrigin.x : 0
+  y: root.pinned ? panel.cardOrigin.y : 0
+  width: root.pinned ? panel.contentWidth : panel.screenW
+  height: root.pinned ? panel.contentHeight : panel.screenH
+}
+```
+
+`cardOrigin`, `contentWidth/Height`, `screenW/H` are all public readonly
+properties of KeyboardPanel, and the card is drawn at exactly that rect.
+
+No second host, no body split, no `Inline components form a cycle!`, no
+`movewindowpixel` dispatch, and nothing to keep in sync between two live
+instances.
+
+## Verified behaviour
+
+Checked by hand against the running shell, not the rig:
+
+| Case | Result |
+|---|---|
+| Pinned, click a window on the panel's monitor | window focuses, panel stays open |
+| Pinned, type into that window | every character arrives, including `c`/`h`/`t`/`o`/`p`/`r` |
+| Pinned, click back on the card, press `j` | cursor moves — panel has the keyboard again |
+| Pinned, click the bar icon | force-closes and unpins, as before |
+| Unpin, then click outside | closes normally |
+| Unpinned throughout | unchanged from before the patch |
+
+The `c`/`h` check matters: those are panel keybindings, and their arriving in
+the other window is the proof that the panel is not merely *ignoring* keys but
+genuinely not receiving them.
+
+## Remaining issue: other monitors
+
+`KeyboardPanel` gives every *other* output a transparent full-screen twin whose
+only job is to catch a click there and dismiss:
+
+```qml
+Variants {
+  model: root.open ? Quickshell.screens : []
+  ...
+  MouseArea { anchors.fill: parent; onPressed: root.close() }
+}
+```
+
+While pinned, that `close()` is correctly a no-op — but the click is still
+swallowed, so a window on the second monitor does not focus. Verified: clicking
+a toplevel on DP-1 while pinned left the active window unchanged.
+
+The twins are created inside the component with no `id` or alias reachable from
+the plugin, and they are gated only on `root.open`, which cannot be false while
+the card is visible. So this is **not fixable from the plugin**; it needs a
+change in `/usr/share/omarchy/shell/Ui/KeyboardPanel.qml`, which is
+package-owned and must not be edited locally.
+
+Suggested upstream shape: have the twins honour the same input region the main
+surface uses, or expose a `dismissable` property that gates both `dismissArea`
+and the `Variants` model, so an owner that overrides `close()` to a no-op can
+also say so. Worth filing against omarchy rather than working around.
+
+## Architecture facts (still accurate, keep)
+
+### Outside-click dismissal delegates to the plugin
+
+`KeyboardPanel.close()` is:
 
 ```qml
 function close() {
-  if (owner && "close" in owner) owner.close()   // ← delegates to the plugin!
+  if (owner && "close" in owner) owner.close()
   else root.open = false
 }
 ```
 
-The plugin passes `owner: root`. Therefore shadowing `close()` on the
-widget root intercepts every dismissal. QML method dispatch resolves to the
-most-derived override, so base `toggle()`/IPC also funnel through it.
+The plugin passes `owner: root`, so shadowing `close()` on the widget root
+intercepts every dismissal — that is what pin v1 (`8af6420`, `cbeef30`) is
+built on, and it still stands. Explicit closes route through `forceClose()`.
 
-### 2. Why pinned overlay locks the keyboard (the unsolved limitation)
+### Keyboard focus
 
 ```qml
 WlrLayershell.keyboardFocus: open
@@ -49,133 +143,38 @@ WlrLayershell.keyboardFocus: open
   : WlrKeyboardFocus.None
 ```
 
-Steady state while open is **OnDemand** after a brief Exclusive prime.
-Hyprland gives keyboard to an OnDemand layer surface when it maps and does
-NOT move keyboard focus when the user clicks empty desktop / another
-monitor area — only clicking an actual toplevel may take it (and even then
-behavior was reported broken). Net effect: with v1 pinned, typing anywhere
-else stays captured by the panel. This is inherent to keeping the dashboard
-as an overlay surface; no guard-style hack fixes it.
+A 75ms Exclusive prime on open, then OnDemand. Left alone by the fix. Qt
+restores active focus to the previous focus item when the surface regains
+keyboard focus, so clicking back into the panel needs no explicit
+`forceActiveFocus()` — confirmed, `j` works immediately after clicking the card.
 
-### 3. FloatingWindow exists and is the intended escape hatch
+### FloatingWindow, if it is ever needed for something else
 
-- Type: `FloatingWindow` from `import Quickshell` (regular xdg toplevel,
-  normal focus semantics).
-- Reference implementation: `/usr/share/omarchy/shell/plugins/dev-gallery/
-  GalleryPanel.qml` (~line 277): FloatingWindow + FocusScope{focus:true} +
-  `PanelKeyCatcher` for panel-style j/k/esc dispatch inside a plain window.
-- API notes (from `/usr/lib/qt6/qml/Quickshell/_Window/quickshell-window.qmltypes`):
-  - Has: `title, color, implicitWidth/Height, minimumSize/maximumSize,
-    visible, screen, aboveWindows, grabFocus, mask, surfaceFormat`.
-  - Has **NO `x`/`y`**. Compositor chooses first placement; reposition via
-    `Hyprland.dispatch("movewindowpixel exact <x> <y>,title:<title>")`
-    after mapping (absolute desktop coords). `relativeX/Y` exist only on
-    popup windows — do not confuse them.
-- `PopupCard.qml` (qs.Ui) is a third host: `PopupWindow` +
-  `HyprlandFocusGrab`; used for mouse-driven popups, not keyboard panels.
-- Panel-kind plugins are loaded by shell.qml through Loaders that keep the
-  instance alive ("the plugin's FloatingWindow + state survive between
-  summons") — a floating window owned by the plugin is an expected pattern.
+- `FloatingWindow` from `import Quickshell`; regular xdg toplevel.
+- Reference: `/usr/share/omarchy/shell/plugins/dev-gallery/GalleryPanel.qml`.
+- Has **no `x`/`y`** — the compositor places it; reposition with
+  `Hyprland.dispatch("movewindowpixel exact <x> <y>,title:<title>")` after it
+  maps. `relativeX/Y` exist only on popup windows.
+- Declaring `component DashboardBody: Item {...}` in `Panel.qml` while it
+  references other inline components declared later in the same file fails with
+  `Inline components form a cycle!`. Moving the body to its own file is the
+  structural fix, but see above — none of this is needed for the pin.
 
-### 4. Inline-component cycle pitfall
+### Test rig
 
-Declaring `component DashboardBody: Item {...}` inside Panel.qml while its
-instances sit in hosts in the SAME file, where the body references other
-inline components declared later in that file (GuestRow etc.), fails with:
+The headless rig described in the original handoff passed all 29 checks on the
+version that was broken in real use, and would have passed on the version with
+the pointer bug too: it asserts structure, and this was a compositor input
+region. Anything touching pointer or focus behaviour has to be checked by hand
+against a real session — `hyprctl layers`, `hyprctl activewindow`, and typing
+into a scratch window are enough and take a minute.
 
-> `Inline components form a cycle!`
-
-Solution attempted: move the body to its own file. That worked structurally
-(see v2 below) but shipped broken anyway.
-
-### 5. Test rig (rebuildable, was under /tmp/opencode/rig — ephemeral!)
-
-Headless-ish harness that instantiates the real Panel.qml under a real
-Wayland session:
-
-- Mock PVE API: python http.server serving `/api2/json/cluster/resources`,
-  `/nodes/{n}/{type}/{id}/config`, `/nodes/{n}/{type}/{id}/status/current`
-  wrapped `{data: ...}`, auth header `PVEAPIToken=<token>` else deceptive
-  401-with-empty-body (mirrors real PVE). State in state.json, mutated
-  between polls.
-- Token file trick: `credentialsPath` setting → rig token whose host line
-  is `http://127.0.0.1:8999`.
-- Harness `shell.qml`: symlink `Commons`,`Ui` → `/usr/share/omarchy/shell/*`
-  and `plugin` → worktree dir; instantiate `plugin.Panel` with settings
-  pointing at rig token; drive phases with a Timer; find internals by tree
-  walking (`Item.data` includes non-Item children like PanelWindow;
-  dedupe traversal or you get exponential re-visits).
-- Run: `TEST_MODE=<mode> quickshell -p shell.qml` (needs Wayland session;
-  QT_QPA_PLATFORM=offscreen fails — KeyboardPanel requires layer-shell).
-- Modes built: pr1 (setting toggle), pr2 (+ delegate persistence/glide/
-  hysteresis probes), pin (host assertions). Assertions included object-
-  identity checks across polls (delegate/slot persistence), frame sampling
-  of meter fill width (glide), ListView.currentIndex stability.
-- Rig bugs to avoid: stopping the scheduler Timer mid-phases (deadlock);
-  `pgrep -f` matching its own command line; Item.data vs .children double
-  walk.
-
-## What v2 did (reset away, but instructive)
-
-Split `Panel.qml` into controller+hosts and `PanelBody.qml` (entire visual
-body: keyCatcher/header/filter/list/legend + all row components).
-Dependencies injected as `property var ctrl` (widget root) and
-`property var pve` (service); all internal `root.` references rewritten to
-`ctrl.`. Hosts: KeyboardPanel (open: opened && !pinned) and FloatingWindow
-(visible: pinned && opened), each embedding PanelBody. Position via
-movewindowpixel dispatch after map.
-
-All 11 pin-mode + 18 regression checks PASSED headless: overlay hid, float
-showed, rows rendered in float mode, close/unpin/toggle semantics right,
-and none of the earlier features regressed.
-
-## Why it still failed live (open question)
-
-User report: "completely borken" in real use — no further symptom detail
-captured before revert. Hypotheses ranked for the next agent:
-
-1. **Dual live instances of the body**: both hosts instantiate PanelBody at
-   once (overlay hidden but alive). Two PanelKeyCatchers, two filterFields,
-   duplicate focus targets, double IPC-ish side effects. Headless rig never
-   exercised real focus competition. Fix candidate: single body reparented
-   between hosts (ReparentingLoader / `parent` swap) or destroy-overlay-
-   entirely while pinned instead of hiding.
-2. **Sizing/layout**: body previously relied on KeyboardPanel's
-   contentHolder sizing; in FloatingWindow it sat in FocusScope with
-   anchors.fill — width-capped list/hero logic (fittedContentWidth) lived on
-   the host and may not transfer; content could render zero-width/misplaced.
-3. **movewindowpixel timing/title selector**: dispatch fires immediately on
-   visibleChanged; window may not be mapped yet, and title selector needs
-   initial placement rules (Hyprland windowrule for `title:Omaprox` might be
-   more reliable).
-4. **Layer vs toplevel z-order/keyboard interplay**: bar remains an overlay;
-   float window opens UNDER overlays? Clicking the bar icon again routes
-   through dismissArea of... overlay closed, so probably fine.
-5. Hyprland version specifics for OnDemand layer surfaces (check
-   `hyprctl layers` while pinned-v1 to confirm who holds keyboard).
-
-## Suggested next steps
-
-1. Reproduce v2 breakage locally with the rig PLUS a real interaction pass
-   (rig asserts structure, not human-visible layout/focus).
-2. Prefer **single-host swap**: one PanelBody instance moved between hosts
-   (or hosts toggled with Loader active=false on the inactive one) to kill
-   dual-instance hazards.
-3. Alternative lighter design if floating proves cursed: keep overlay
-   pinned but flip `WlrLayershell.keyboardFocus` to None while pinned and
-   require click-inside-to-focus for keys (loses always-on j/k; keeps
-   typing freedom). Verify Hyprland lets a click refocus an OnDemand layer.
-4. Persist the rig into the repo (tools/) — it caught every regression so
-   far and the inline-cycle/API pitfalls cost hours.
-
-## File map (post-revert)
+## File map
 
 - `Panel.qml` — widget root: theme, cursor/state machine, reconcileRows,
-  lifecycle, IPC hatch, BarIconButton, KeyboardPanel host, pin v1 guard.
+  lifecycle, IPC hatch, BarIconButton, KeyboardPanel host, pin guard + mask.
 - `Service.qml` — credentials/polling/console launchers, alarmMemo,
   smoothMeters/showRunningCount settings.
 - `Model.js` — pure row shaping; ALARM_CLEAR_BAND hysteresis; glyphFor
-  (pin glyph `\uf04a`, verified present in JetBrainsMono Nerd Font).
+  (pin glyph ``, verified present in JetBrainsMono Nerd Font).
 - `Api.js` — URLs/curl config/parsers.
-- Local branches: `feat/pin-panel` (v1 pin @cbeef30 + this doc),
-  `wip-local` (author's older ~700-line WIP snapshot), plus PR branches.
