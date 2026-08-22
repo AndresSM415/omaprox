@@ -55,6 +55,7 @@ Item {
   // the poll knows which per-guest status to keep fresh.
   property string selectedKey: ""
   property var guestStatus: ({ key: "", data: null })
+  property var nodeStatus: ({ key: "", data: null })
 
   readonly property var selectedGuest: {
     if (selectedKey === "") return null
@@ -65,10 +66,21 @@ Item {
 
   readonly property var selectedConfig: selectedKey !== "" ? (configs[selectedKey] || null) : null
 
+  // A node is selected through the same key channel as a guest, namespaced
+  // with a "node/" prefix so the two can never collide.
+  readonly property var selectedNode: {
+    if (selectedKey.indexOf("node/") !== 0) return null
+    var name = selectedKey.slice(5)
+    for (var i = 0; i < nodes.length; i++)
+      if (nodes[i].name === name) return nodes[i]
+    return null
+  }
+
   readonly property string selectedAddress: {
     var guest = selectedGuest
     if (!guest) return ""
-    return Api.consoleAddress(guest, selectedConfig, agentAddresses[selectedKey] || "", addressOverrides)
+    return Api.resolveAddress(guest, selectedConfig, agentAddresses[selectedKey] || "",
+      addressOverrides, resolvedAddresses).address
   }
 
   // --- status --------------------------------------------------------------
@@ -80,6 +92,29 @@ Item {
   property bool rdpAvailable: true
 
   readonly property bool busy: refreshing || statusRefreshing
+
+  // What the icons actually dim on. `busy` flips true and back on every poll,
+  // and against a cluster on the same network that round trip is a few
+  // milliseconds — so binding an animated opacity straight to it blinks the
+  // bar icon and the hero mark on every refresh while telling you nothing you
+  // did not already know. A refresh only becomes worth reporting once it is
+  // slow enough that you would otherwise wonder whether the panel is stuck.
+  property bool busySlow: false
+
+  Timer {
+    id: busyDelay
+    interval: 700
+    onTriggered: root.busySlow = root.busy
+  }
+
+  onBusyChanged: {
+    if (busy) {
+      busyDelay.restart()
+    } else {
+      busyDelay.stop()
+      busySlow = false
+    }
+  }
   readonly property int alarms: Model.alarmCount(modelState())
   readonly property int running: Model.runningCount(guests)
   readonly property bool warning: alarms > 0 || lastError !== ""
@@ -90,6 +125,7 @@ Item {
   // shell, so every default is restated here. Changing one means changing both.
   readonly property int refreshIntervalSec: intSetting("refreshIntervalSec", 10, 5, 300)
   readonly property real memWarn: intSetting("memWarnPercent", 90, 50, 100) / 100
+  readonly property bool showRunningCount: boolSetting("showRunningCount", true)
   readonly property bool showTemplates: boolSetting("showTemplates", false)
   readonly property bool useAgentAddresses: boolSetting("agentAddresses", false)
   readonly property bool verifyTls: boolSetting("verifyTls", false)
@@ -106,6 +142,17 @@ Item {
     var value = setting("addresses", null)
     return value && typeof value === "object" ? value : ({})
   }
+
+  // Addresses a console helper resolved by asking, rather than one written by
+  // hand in shell.json. The manual override above always wins if both exist —
+  // this is what fills the gap the first time a VM's address cannot be found
+  // any other way, so the only manual step left is the one prompt itself.
+  readonly property string addressStorePath: {
+    var xdg = Quickshell.env("XDG_CONFIG_HOME")
+    if (!xdg || xdg === "") xdg = Quickshell.env("HOME") + "/.config"
+    return xdg + "/omaprox/addresses"
+  }
+  property var resolvedAddresses: ({})
 
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
@@ -133,7 +180,9 @@ Item {
     return {
       guests: guests, nodes: nodes, configs: configs,
       selectedGuest: selectedGuest,
+      selectedNode: selectedNode,
       guestStatus: guestStatus,
+      nodeStatus: nodeStatus,
       consoleAddress: selectedAddress,
       thresholds: { memWarn: memWarn },
       showTemplates: showTemplates,
@@ -174,6 +223,26 @@ Item {
       root.credentialHost = ""
       root.credentialError = "no token file at " + root.credentialsPath
     }
+  }
+
+  // Same watcher-on-a-missing-directory hazard as the token file above, and
+  // the same fix: create the directory before the FileView below is built.
+  Process {
+    id: ensureAddressStoreDir
+    running: true
+    command: ["mkdir", "-p", root.addressStorePath.slice(0, root.addressStorePath.lastIndexOf("/"))]
+  }
+
+  FileView {
+    id: addressStoreFile
+    path: root.addressStorePath
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.resolvedAddresses = Api.parseAddressStore(text())
+    // Absence is the normal state until the first console helper writes to
+    // it — nothing to report, just nothing stored yet.
+    onLoadFailed: root.resolvedAddresses = ({})
   }
 
   // Belt and suspenders for the watcher gap above: even with the directory
@@ -264,6 +333,16 @@ Item {
       var response = Api.parseResponse(text)
       if (!response.ok) {
         root.lastError = label + ": " + response.error
+        // A rejected token means the guests and nodes on screen belong to
+        // whatever the token last worked against, which is no longer
+        // provably this host — pointing the same address at a different
+        // install (a rebuilt node, a restored one, one entered by hand while
+        // testing) leaves the old cluster's data on screen looking exactly
+        // as current as it did a moment ago. Any other failure — the network
+        // down for one poll, a timeout — leaves the list alone: the data is
+        // just old, not wrong, and clearing it on every blip would empty the
+        // panel over a single flaky refresh.
+        if (response.auth) root.clearClusterData()
         if (onFail) onFail()
         return
       }
@@ -283,6 +362,18 @@ Item {
     return errorText !== "" ? errorText : "curl exited " + exitCode
   }
 
+  // Everything the last successful poll produced. Called only when a token is
+  // rejected outright — see `handle()` — because that is the one failure that
+  // means the data is not merely old but no longer known to belong to this
+  // host at all.
+  function clearClusterData() {
+    root.guests = []
+    root.nodes = []
+    root.configs = ({})
+    root.agentAddresses = ({})
+    root._configQueue = []
+  }
+
   function refresh() {
     if (!credentialsLoaded || token === "" || host === "") return
     if (clusterReq.running) return
@@ -295,9 +386,10 @@ Item {
       root.refreshing = false
       root.lastRefreshMs = Date.now()
       root.queueConfigs()
-      // The open guest's numbers come from its own endpoint, and the cluster
-      // poll is the clock everything else runs on, so it drives that too.
-      if (root.selectedKey !== "") root.refreshGuestStatus()
+      // The open guest's or node's numbers come from its own endpoint, and
+      // the cluster poll is the clock everything else runs on, so it drives
+      // that too.
+      if (root.selectedKey !== "") root.refreshSelectedStatus()
     }, function() { root.refreshing = false }))
   }
 
@@ -376,7 +468,43 @@ Item {
     // memory under the new guest's name for one poll is worse than showing the
     // cluster-wide figures the detail view falls back to.
     root.guestStatus = { key: "", data: null }
-    if (root.selectedKey !== "") root.refreshGuestStatus()
+    root.nodeStatus = { key: "", data: null }
+    if (root.selectedKey !== "") root.refreshSelectedStatus()
+  }
+
+  // Whichever of the two is open. Only one can be selected at a time, so they
+  // share the single request slot.
+  function refreshSelectedStatus() {
+    if (selectedNode) refreshNodeStatus()
+    else refreshGuestStatus()
+  }
+
+  function refreshNodeStatus() {
+    var node = selectedNode
+    if (!node) return
+    if (statusReq.running) return
+    if (token === "" || host === "") return
+
+    var key = root.selectedKey
+    root.statusRefreshing = true
+    statusReq.send(Api.nodeStatusUrl(host, node.name),
+      function(exitCode, text, errorText) {
+        root.statusRefreshing = false
+        if (exitCode !== 0) {
+          root.lastError = "node status: " + root.curlFailure(exitCode, errorText)
+          return
+        }
+        var response = Api.parseResponse(text)
+        if (!response.ok) {
+          // Not fatal: the node view still has everything the cluster call
+          // gave it, and simply shows fewer rows.
+          root.lastError = "node status: " + response.error
+          return
+        }
+        if (key !== root.selectedKey) return
+        root.lastError = ""
+        root.nodeStatus = { key: key, data: response.data }
+      })
   }
 
   function refreshGuestStatus() {
@@ -412,6 +540,27 @@ Item {
 
   // The only thing in the plugin that acts, and it acts on this machine: it
   // opens a window. Proxmox is not asked to do anything.
+  function nodeByName(name) {
+    for (var i = 0; i < nodes.length; i++)
+      if (nodes[i].name === name) return nodes[i]
+    return null
+  }
+
+  // A shell on the node itself. Same helper as a guest console, so the
+  // one-time SSH key offer covers this too.
+  function openNodeConsole(node) {
+    if (!node) return
+    // On a cluster the node has to be addressed by its own name; on a single
+    // node the API host is the same machine and is known to resolve, which a
+    // name like `pve` frequently does not.
+    var target = nodes.length > 1 ? node.name : Api.hostAuthority(host)
+    runInTerminal(
+      Util.shellQuote(helperPath("omaprox-ssh")) + " "
+        + Util.shellQuote(nodeSshUser) + " " + Util.shellQuote(target),
+      node.name + "  ·  node")
+    flashStatus("Console: " + node.name)
+  }
+
   function openConsole(guest) {
     if (!guest) return
     if (guest.status !== "running") {
@@ -421,7 +570,9 @@ Item {
 
     var key = Model.guestKey(guest)
     var config = configs[key] || null
-    var address = Api.consoleAddress(guest, config, agentAddresses[key] || "", addressOverrides)
+    var resolved = Api.resolveAddress(guest, config, agentAddresses[key] || "",
+      addressOverrides, resolvedAddresses)
+    var address = resolved.address
     var values = {
       vmid: guest.vmid, name: guest.name, node: guest.node, address: address,
       // The bare address the API is reached on, for setups whose node names do
@@ -466,14 +617,22 @@ Item {
       var rdpTemplate = String(setting("rdpCommand", "") || "").trim()
       if (rdpTemplate === "") {
         // Straight to the helper with no terminal wrapped around it. When it
-        // already has the credentials nothing appears but the desktop; when it
-        // does not, it opens its own terminal to ask and closes it again once
-        // the session starts. Wrapping it here would put a terminal on screen
-        // every time, including the times it has nothing to say.
+        // already has the address and credentials nothing appears but the
+        // desktop; when it does not have either, it opens its own terminal to
+        // ask — address first, then credentials if those are also unknown —
+        // and closes it again once the session starts. Wrapping it here would
+        // put a terminal on screen every time, including the times it has
+        // nothing to say.
+        //
+        // An unconfirmed address is handed over as an empty string rather than
+        // the guessed guest name: that guess is exactly what used to be tried
+        // silently and fail, and passing it through would give the helper no
+        // way to tell a real address from a hopeful one.
         Quickshell.execDetached([
-          helperPath("omaprox-rdp"), address, guest.name
+          helperPath("omaprox-rdp"), "--vmid", String(guest.vmid),
+          resolved.known ? address : "", guest.name
         ].concat(rdpUser !== "" ? ["/u:" + rdpUser] : []))
-        flashStatus("RDP: " + address)
+        flashStatus(resolved.known ? "RDP: " + address : "RDP: " + guest.name + " — resolving address")
         return
       }
 
@@ -488,11 +647,50 @@ Item {
     var vmTemplate = String(setting("vmConsoleCommand", "") || "").trim()
     var vmCommand = vmTemplate !== ""
       ? Api.renderCommand(vmTemplate, values)
+      // This one runs in a terminal already (unlike the RDP path above), so
+      // there is no no-tty relaunch to arrange — an unresolved address is
+      // simply asked for inline, the same terminal the console itself opens
+      // in.
       : Util.shellQuote(helperPath("omaprox-ssh"))
+        + " --vmid " + Util.shellQuote(String(guest.vmid))
+        + " --guess " + Util.shellQuote(guest.name)
         + " " + Util.shellQuote(guestSshUser)
-        + " " + Util.shellQuote(address)
+        + " " + Util.shellQuote(resolved.known ? address : "")
     runInTerminal(vmCommand, title)
     flashStatus("Console: " + guest.name)
+  }
+
+  // "Restore the prompts": drop whatever a console helper resolved or saved
+  // for this guest, so the next connection asks from scratch instead of
+  // reusing an address or password that turned out to be wrong. Only QEMU
+  // guests have anything to forget — a container's console always targets
+  // its node, never the guest itself, so there is no per-guest address or
+  // credential riding on it.
+  function forgetCredentials(guest) {
+    if (!guest || guest.type !== "qemu") {
+      flashStatus("Nothing to forget here")
+      return
+    }
+    if (forgetReq.running) return
+    var key = Model.guestKey(guest)
+    var config = configs[key] || null
+    var address = Api.resolveAddress(guest, config, agentAddresses[key] || "",
+      addressOverrides, resolvedAddresses).address
+    forgetReq.command = [helperPath("omaprox-forget"), String(guest.vmid), address]
+    forgetReq.guestName = guest.name
+    forgetReq.running = true
+  }
+
+  Process {
+    id: forgetReq
+    property string guestName: ""
+    stdout: StdioCollector { id: forgetOut; waitForEnd: true }
+    onExited: function() {
+      var said = String(forgetOut.text || "").trim()
+      root.flashStatus(said.indexOf("forgot") === 0
+        ? "Forgot " + forgetReq.guestName + " — you will be asked again"
+        : "Nothing was stored for " + forgetReq.guestName)
+    }
   }
 
   // Scripts ship next to the QML, so the plugin stays a self-contained checkout

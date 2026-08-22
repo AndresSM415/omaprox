@@ -1,5 +1,7 @@
 # Omaprox — Proxmox VE in the Omarchy bar
 
+**[Live demo →](https://omaprox.andressm.com)** — every theme, no Proxmox required.
+
 A read-only Proxmox VE dashboard for the Omarchy 4 (Quattro) bar: every
 container and VM on your cluster with a status light, per-guest stats, and
 one key to a console — `pct enter` for containers, SSH for Linux VMs,
@@ -84,12 +86,17 @@ stats. `o` opens the Proxmox web UI at the selected guest.
 | `j` / `k`, arrows | move the cursor |
 | `l` / Enter | open a guest's stats; on a node, the web UI |
 | `h` / Escape | back out one level, then close the panel |
-| `t` | console — terminal, or remote desktop for Windows |
+| `t` | console — terminal for a node or Linux guest, remote desktop for Windows |
 | `o` | open the Proxmox web UI at this guest |
 | `c` | copy the address |
 | `/` | search by name, vmid, node or OS |
+| `F` | forget a Windows guest's saved address and password (asks again next time) |
 | `r` | refresh now |
 | `Tab` | move to the next bar panel |
+
+The panel keeps polling on its own schedule while it is open. Rows update in
+place rather than rebuilding, so live figures never flicker or move the list —
+and `r` still refreshes on demand when a poll is too far away.
 
 Mouse: left click toggles the panel, right click refreshes, middle click
 opens the web UI.
@@ -101,11 +108,19 @@ threshold, a node offline, or a stopped guest with autostart on.
 
 ## Consoles
 
-Press `t`, or click the left edge of a guest row. Containers open
-`pct enter` on their node; Linux VMs open SSH; Windows VMs open a remote
-desktop. A stopped guest's button stays in place, dimmed and inert.
+Press `t`, or click the left edge of a row. Nodes open a shell on
+themselves; containers open `pct enter` on their node; Linux VMs open SSH;
+Windows VMs open a remote desktop. A stopped guest's button stays in place,
+dimmed and inert.
 
-**First time on a Linux guest**, the SSH helper offers to install your
+**First time on a Linux VM or Windows VM**, if the guest agent has not
+reported an address and none is set in `shell.json`, the console opens in a
+terminal and asks for one — a hostname or IP, whatever actually resolves to
+that guest. It is remembered in `~/.config/omaprox/addresses`, keyed by
+vmid, so you are only asked once per guest. Containers never ask: `pct
+enter` always targets the node they live on, not the container itself.
+
+**First time on a Linux guest**, the SSH helper also offers to install your
 public key, and every connection after that is silent. Say no and it just
 asks each time. No SSH password is ever stored — an authorized key is the
 better version of "remember me".
@@ -114,14 +129,23 @@ better version of "remember me".
 and domain (blank for a local account), verifies them, and saves the
 password to your login keyring. Later connections go straight to the
 desktop. A saved password the server rejects is deleted and asked for
-again. Inspect or remove one yourself:
+again.
+
+**Got the wrong address, or need to redo credentials?** Press `F` on a
+Windows guest to forget its saved address and password — the next console
+attempt asks for both again, fresh. Linux guests have nothing to forget
+this way: an installed SSH key is authorization granted on the guest
+itself, not a secret held here, so it is removed from that account's
+`~/.ssh/authorized_keys` on the guest, not through Omaprox. You can also
+inspect or clear stored state directly:
 
 ```bash
-secret-tool search service omaprox          # attributes print on stderr
+cat ~/.config/omaprox/addresses                     # vmid = address, one per line
+secret-tool search service omaprox                  # attributes print on stderr
 secret-tool clear service omaprox host 192.168.1.50
 ```
 
-Console dependencies: `openssh` for containers and Linux VMs,
+Console dependencies: `openssh` for nodes, containers and Linux VMs,
 `xfreerdp3` and `secret-tool` for Windows VMs.
 
 ## Configure
@@ -153,9 +177,10 @@ Everything else lives in the widget's entry in
 | `vmConsoleCommand` | `ssh -t {guestUser}@{address}` | Linux VM console, runs in a floating terminal |
 | `rdpCommand` | `xfreerdp3 /v:{address} /dynamic-resolution +clipboard` | Windows console, launched directly |
 | `memWarnPercent` | 90 | memory share that turns a light red |
+| `showRunningCount` | `On` | show the number of running guests beside the bar icon |
 | `showTemplates` | `Off` | templates never run, so they would be permanently dark rows |
 | `agentAddresses` | `Off` | read VM addresses from the guest agent; needs `VM.Monitor` |
-| `addresses` | — | per-vmid address overrides, keyed by vmid as a string |
+| `addresses` | — | per-vmid address overrides, keyed by vmid as a string — usually unnecessary, since the console prompts for and remembers an address itself the first time it needs one |
 
 Placeholders for the three command templates: `{vmid}` `{name}` `{node}`
 `{host}` `{address}` `{nodeUser}` `{guestUser}` `{rdpUser}`.
@@ -173,7 +198,12 @@ a Proxmox node *name*, not necessarily a hostname. On a single node use
 On a cluster, `pct enter` has to run on the node the container lives on, so
 keep `{node}` and give the node names to `/etc/hosts` or your resolver.
 
-To open a guest whose name will not resolve, override its address per vmid:
+A guest whose name will not resolve is normally handled by the console's own
+first-connection prompt (see [Consoles](#consoles)), which remembers the
+address you give it. Set `addresses` in `shell.json` instead only if you
+want it fixed in version-controlled config rather than in
+`~/.config/omaprox/addresses` — it takes precedence over both the prompt and
+whatever was previously remembered:
 
 ```jsonc
 { "id": "io.github.andressm415.omaprox", "addresses": { "202": "10.0.20.42" } }

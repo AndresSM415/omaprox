@@ -329,9 +329,9 @@ function nodeRow(node, state) {
     detail: (node.maxcpu > 0 ? node.maxcpu + " cores" : "")
       + (node.uptime > 0 ? "  ·  up " + formatUptime(node.uptime) : ""),
     meters: [
-      { label: "cpu", percent: cpuFraction, text: formatPercent(cpuFraction),
+      { key: "node/" + node.name + "/cpu", label: "cpu", percent: cpuFraction, text: formatPercent(cpuFraction),
         level: levelFor(cpuFraction, state.thresholds.memWarn) },
-      { label: "mem", percent: memFraction,
+      { key: "node/" + node.name + "/mem", label: "mem", percent: memFraction,
         text: shortBytes(node.mem) + "/" + shortBytes(node.maxmem),
         level: levelFor(memFraction, state.thresholds.memWarn) }
     ],
@@ -577,6 +577,120 @@ function buildGuestView(state) {
   return flatten(groups)
 }
 
+// ---------------------------------------------------------------- node view
+
+// A node's detail is built from the cluster-wide record alone: the one call
+// already carries cpu, memory, disk and uptime for every node, so nothing
+// extra has to be fetched to fill this screen.
+function buildNodeView(state) {
+  var node = state.selectedNode
+  if (!node)
+    return flatten([{ title: "", rows: [{ kind: "note", key: "gone", name: "That node is no longer on the cluster", selectable: false }] }])
+
+  var meters = []
+  var cpuFraction = node.cpu
+  meters.push({
+    kind: "meter", key: "node/" + node.name + "/cpu", title: "CPU",
+    percent: cpuFraction, value: formatPercent(cpuFraction),
+    detail: (node.maxcpu > 0 ? node.maxcpu + (node.maxcpu === 1 ? " core" : " cores") : ""),
+    level: levelFor(cpuFraction, state.thresholds.memWarn),
+    selectable: true
+  })
+
+  var memFraction = node.maxmem > 0 ? node.mem / node.maxmem : 0
+  meters.push({
+    kind: "meter", key: "node/" + node.name + "/mem", title: "Memory",
+    percent: memFraction, value: formatPercent(memFraction),
+    detail: formatBytes(node.mem) + " / " + formatBytes(node.maxmem),
+    level: levelFor(memFraction, state.thresholds.memWarn),
+    selectable: true
+  })
+
+  if (node.maxdisk > 0) {
+    var diskFraction = node.disk / node.maxdisk
+    meters.push({
+      kind: "meter", key: "node/" + node.name + "/disk", title: "Rootfs",
+      percent: diskFraction, value: formatPercent(diskFraction),
+      detail: formatBytes(node.disk) + " / " + formatBytes(node.maxdisk),
+      level: levelFor(diskFraction, state.thresholds.memWarn),
+      selectable: true
+    })
+  }
+  // Everything below comes from the node's own status endpoint, fetched only
+  // while this view is open. Each row appears only once its figure has
+  // arrived, so the view is useful immediately and simply grows.
+  var detailed = state.nodeStatus && state.nodeStatus.key === "node/" + node.name
+    ? (state.nodeStatus.data || {}) : {}
+
+  var swap = detailed.swap || {}
+  if (Number(swap.total) > 0) {
+    var swapFraction = Number(swap.used) / Number(swap.total)
+    meters.push({
+      kind: "meter", key: "node/" + node.name + "/swap", title: "Swap",
+      percent: swapFraction, value: formatPercent(swapFraction),
+      detail: formatBytes(swap.used) + " / " + formatBytes(swap.total),
+      level: levelFor(swapFraction, state.thresholds.memWarn),
+      selectable: true
+    })
+  }
+
+  var groups = [{ title: "RESOURCES", rows: meters }]
+
+  var load = []
+  // Load average against core count is the reading that says whether a node is
+  // actually oversubscribed — 4.0 is idle on 12 cores and drowning on 2.
+  if (Array.isArray(detailed.loadavg) && detailed.loadavg.length >= 3) {
+    load.push({ kind: "kv", key: "node/" + node.name + "/load", title: "Load",
+      value: detailed.loadavg.slice(0, 3).join("  ·  ")
+        + (node.maxcpu > 0 ? "   of " + node.maxcpu : ""),
+      selectable: true })
+  }
+  // Time the CPU spent waiting on storage. A node can look idle and still be
+  // unusable if this is high, and nothing else on the panel would show it.
+  if (detailed.wait !== undefined) {
+    var wait = Number(detailed.wait) || 0
+    load.push({ kind: "kv", key: "node/" + node.name + "/wait", title: "IO delay",
+      value: formatPercent(wait),
+      tone: wait >= 0.1 ? "warn" : "dim", selectable: true })
+  }
+  if (load.length) groups.push({ title: "LOAD", rows: load })
+
+  var facts = []
+  facts.push({ kind: "kv", key: "node/" + node.name + "/uptime", title: "Uptime",
+    value: formatUptimeLong(node.uptime), selectable: true })
+  facts.push({ kind: "kv", key: "node/" + node.name + "/status", title: "Status",
+    value: node.status, tone: node.status === "online" ? "ok" : "warn", selectable: true })
+
+  var cpuinfo = detailed.cpuinfo || {}
+  if (cpuinfo.model) {
+    facts.push({ kind: "kv", key: "node/" + node.name + "/cpumodel", title: "CPU",
+      value: String(cpuinfo.model).replace(/\s+/g, " ").trim(), tone: "dim", selectable: true })
+  }
+  if (node.maxcpu > 0) {
+    facts.push({ kind: "kv", key: "node/" + node.name + "/cpus", title: "Cores",
+      value: node.maxcpu + (Number(cpuinfo.sockets) > 0
+        ? "  ·  " + cpuinfo.sockets + (Number(cpuinfo.sockets) === 1 ? " socket" : " sockets") : ""),
+      tone: "dim", selectable: true })
+  }
+  if (detailed.pveversion) {
+    // "pve-manager/9.2.5/20242970da7fbcef" — the trailing build hash is three
+    // times the width of the part anyone reads.
+    facts.push({ kind: "kv", key: "node/" + node.name + "/pve", title: "Proxmox",
+      value: String(detailed.pveversion).replace(/^pve-manager\//, "").split("/")[0],
+      tone: "dim", selectable: true })
+  }
+  // The running kernel release, not the full uname banner, which is three
+  // times the width and says the same thing.
+  var kernel = detailed["current-kernel"] || {}
+  if (kernel.release) {
+    facts.push({ kind: "kv", key: "node/" + node.name + "/kernel", title: "Kernel",
+      value: String(kernel.release), tone: "dim", selectable: true })
+  }
+  groups.push({ title: "NODE", rows: facts })
+
+  return flatten(groups)
+}
+
 // ---------------------------------------------------------------- search
 
 function matchesFilter(row, filter) {
@@ -610,6 +724,7 @@ function buildSearch(state) {
 function buildRows(state) {
   if (state.filter) return buildSearch(state)
   if (state.selectedGuest) return buildGuestView(state)
+  if (state.selectedNode) return buildNodeView(state)
   return buildOverview(state)
 }
 

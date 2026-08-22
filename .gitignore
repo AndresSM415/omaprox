@@ -2,3 +2,5 @@
 *.jsc
 .qmlls.ini
 image.png
+.wrangler/
+docs/demo/dist/

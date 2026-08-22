@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Forget everything locally cached for one guest's console, so the next
+# connection asks from scratch.
+#
+#   omaprox-forget <vmid> [address]
+#
+# Clears the resolved address remembered under this vmid in
+# ~/.config/omaprox/addresses (the file bin/omaprox-ssh and bin/omaprox-rdp
+# both write to), and the RDP password saved in the login keyring under
+# whichever address is passed — the caller's live, currently-resolved one,
+# since that is the key those credentials were actually filed under.
+#
+# There is deliberately nothing here for SSH beyond the address. An installed
+# SSH key is not a secret held on this machine to forget; it is authorization
+# granted on the remote account, and undoing that means removing the line
+# from that account's ~/.ssh/authorized_keys — on the guest, not here, and not
+# something this plugin reaches for on your behalf.
+
+set -uo pipefail
+
+VMID=${1:-}
+ADDRESS=${2:-}
+
+if [[ -z $VMID ]]; then
+  echo "usage: omaprox-forget <vmid> [address]" >&2
+  exit 2
+fi
+
+ADDRESSES_FILE=${XDG_CONFIG_HOME:-$HOME/.config}/omaprox/addresses
+forgot_address=0
+if [[ -f $ADDRESSES_FILE ]] && grep -qE "^[[:space:]]*${VMID}[[:space:]]*=" "$ADDRESSES_FILE"; then
+  tmp=$(mktemp "${ADDRESSES_FILE}.XXXXXX")
+  grep -vE "^[[:space:]]*${VMID}[[:space:]]*=" "$ADDRESSES_FILE" >"$tmp"
+  mv "$tmp" "$ADDRESSES_FILE"
+  forgot_address=1
+fi
+
+forgot_password=0
+if [[ -n $ADDRESS ]] && command -v secret-tool >/dev/null 2>&1; then
+  # Query first so the result reflects reality: `secret-tool clear` exits 0
+  # whether or not anything was there to clear.
+  if secret-tool lookup service omaprox host "$ADDRESS" >/dev/null 2>&1; then
+    secret-tool clear service omaprox host "$ADDRESS" >/dev/null 2>&1
+    forgot_password=1
+  fi
+  # The pre-rename service name, in case this credential predates it.
+  if secret-tool lookup service proxmarchy host "$ADDRESS" >/dev/null 2>&1; then
+    secret-tool clear service proxmarchy host "$ADDRESS" >/dev/null 2>&1
+    forgot_password=1
+  fi
+fi
+
+if ((forgot_address || forgot_password)); then
+  echo "forgot"
+else
+  echo "nothing stored"
+fi

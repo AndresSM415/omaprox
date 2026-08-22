@@ -52,6 +52,8 @@ Panel {
   property int overviewCursor: 0
 
   readonly property bool inGuest: pve.selectedKey !== "" && filter === ""
+  readonly property bool inNode: pve.selectedNode !== null && filter === ""
+
 
   readonly property var rows: {
     if (!pve.credentialsLoaded) return []
@@ -170,6 +172,8 @@ Panel {
   readonly property string heroTitle: {
     if (filtering || filter !== "") return "Search"
     if (!pve.configured) return "Omaprox"
+    var node = pve.selectedNode
+    if (inNode && node) return node.name
     var guest = pve.selectedGuest
     if (inGuest && guest) return guest.name
     var label = Api.hostLabel(pve.host)
@@ -182,6 +186,9 @@ Panel {
     if (filtering || filter !== "")
       return (matchCount === 0 ? "no matches" : matchCount + " matching")
         + "  ·  esc to leave search"
+    var node = pve.selectedNode
+    if (inNode && node)
+      return "node  ·  " + String(node.status || "unknown") + "  ·  h to go back"
     var guest = pve.selectedGuest
     if (inGuest && guest) {
       return (guest.type === "lxc" ? "LXC " : "QEMU ") + guest.vmid
@@ -195,6 +202,8 @@ Panel {
 
   readonly property string heroDetail: {
     if (!pve.configured) return "SETUP"
+    var node = pve.selectedNode
+    if (inNode && node) return String(node.status || "").toUpperCase()
     var guest = pve.selectedGuest
     if (inGuest && guest && filter === "") return String(guest.status || "").toUpperCase()
     if (pve.alarms > 0) return pve.alarms + (pve.alarms === 1 ? " ALERT" : " ALERTS")
@@ -237,19 +246,41 @@ Panel {
   function enterCurrent() {
     var row = currentRow
     if (!row) return false
-    if (row.kind !== "guest" || !row.guest) return false
-    if (!inGuest) overviewCursor = cursorIndex
-    pve.selectGuest(row.key.indexOf("alert/") === 0 ? row.key.slice(6) : row.key)
+    if (row.kind === "guest" && row.guest) {
+      if (!inGuest) overviewCursor = cursorIndex
+      pve.selectGuest(row.key.indexOf("alert/") === 0 ? row.key.slice(6) : row.key)
+      finishDrill()
+      return true
+    }
+    if (row.kind === "node" || (row.kind === "guest" && row.vtype === "node")) {
+      enterNode(row.kind === "node" ? row.name : row.node)
+      return true
+    }
+    return false
+  }
+
+  function enterNode(name) {
+    if (!name) return
+    if (!inGuest && !inNode) overviewCursor = cursorIndex
+    pve.selectGuest("node/" + name)
+    finishDrill()
+  }
+
+  // Entering a guest or node from the list, or from search. The search field
+  // keeps its own text and focus independently of the filter, so both have to
+  // be dropped here or the next keystroke resumes filtering.
+  function finishDrill() {
     filter = ""
     filtering = false
+    filterField.text = ""
     cursorIndex = 0
     cursorActive = true
-    return true
+    keyCatcher.forceActiveFocus()
   }
 
   function goBack() {
     if (filter !== "" || filtering) { leaveSearch(); return true }
-    if (!inGuest) return false
+    if (!inGuest && !inNode) return false
     pve.selectGuest("")
     cursorIndex = overviewCursor
     clampCursor()
@@ -260,7 +291,7 @@ Panel {
     filtering = false
     filter = ""
     filterField.text = ""
-    cursorIndex = inGuest ? 0 : overviewCursor
+    cursorIndex = inGuest || inNode ? 0 : overviewCursor
     clampCursor()
     keyCatcher.forceActiveFocus()
   }
@@ -281,15 +312,20 @@ Panel {
       if (row.link) pve.openUrl(row.link)
       return
     }
-    if (row.kind === "guest" && row.guest && !inGuest) { enterCurrent(); return }
-    if (row.kind === "guest" && row.vtype === "node") { pve.openNodeWebUi(row.node); close(); return }
-    if (row.kind === "node") { pve.openNodeWebUi(row.name); close(); return }
+    // From the list, Enter drills into a guest or a node; once inside, it has
+    // nowhere left to go and opens the web UI instead.
+    if (!inGuest && !inNode && (row.kind === "guest" || row.kind === "node")) {
+      enterCurrent()
+      return
+    }
     openWebUi()
   }
 
   function openWebUi() {
     var guest = actionGuest
     if (guest) { pve.openWebUi(guest); close(); return }
+    var node = pve.selectedNode
+    if (node) { pve.openNodeWebUi(node.name); close(); return }
     var row = currentRow
     if (row && (row.kind === "node" || row.vtype === "node")) {
       pve.openNodeWebUi(row.name || row.node)
@@ -301,9 +337,14 @@ Panel {
 
   function openConsole() {
     var guest = actionGuest
-    if (!guest) { pve.flashStatus("No guest selected"); return }
-    pve.openConsole(guest)
-    close()
+    if (guest) { pve.openConsole(guest); close(); return }
+    // A node row in the list, or the node whose detail view is open.
+    var row = currentRow
+    var node = pve.selectedNode
+      || (row && row.kind === "node" ? pve.nodeByName(row.name) : null)
+      || (row && row.vtype === "node" ? pve.nodeByName(row.node) : null)
+    if (node) { pve.openNodeConsole(node); close(); return }
+    pve.flashStatus("Nothing selected")
   }
 
   // The address is the thing you actually paste somewhere else; the vmid is
@@ -311,6 +352,11 @@ Panel {
   function copyCurrent() {
     var row = currentRow
     if (!row) return
+    var node = pve.selectedNode
+    if (node && !actionGuest) {
+      pve.copyToClipboard(node.name, "node name")
+      return
+    }
     if (row.kind === "node" || row.vtype === "node") {
       pve.copyToClipboard(row.name || row.node, "node name")
       return
@@ -328,6 +374,9 @@ Panel {
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
+  // Reset to the top of the cluster list each time the panel opens. The poll
+  // keeps running on its own schedule while it is open; rows reconcile in
+  // place, so live updates never rebuild the view out from under the cursor.
   onOpenedChanged: if (opened) {
     cursorActive = false
     cursorIndex = 0
@@ -391,7 +440,9 @@ Panel {
         guests: pve.guests.length,
         configsCached: Object.keys(pve.configs).length,
         agentAddresses: Object.keys(pve.agentAddresses).length,
+        resolvedAddresses: Object.keys(pve.resolvedAddresses).length,
         alarms: pve.alarms,
+        showRunningCount: pve.showRunningCount,
         selectedKey: pve.selectedKey,
         selectedAddress: pve.selectedAddress,
         statusLoaded: pve.guestStatus.key !== "",
@@ -423,14 +474,14 @@ Panel {
           badgeColor: root.urgent
           crossed: !pve.configured
           warning: pve.configured && pve.alarms > 0
-          busy: pve.busy
+          busy: pve.busySlow
         }
 
         // The running count, because that is the number you glance at the bar
         // for. Absent when there is nothing to count, so an unconfigured or
         // empty cluster does not put a lonely 0 on the bar.
         Text {
-          visible: pve.configured && pve.guests.length > 0
+          visible: pve.showRunningCount && pve.configured && pve.guests.length > 0
           anchors.verticalCenter: parent.verticalCenter
           text: String(pve.running)
           color: root.barIconColor
@@ -486,6 +537,7 @@ Panel {
         else if (t === "t") root.openConsole()
         else if (t === "o") root.openWebUi()
         else if (t === "c") root.copyCurrent()
+        else if (t === "F") pve.forgetCredentials(root.actionGuest)
       }
 
       // Header pinned to the top, legend pinned to the bottom, list filling
@@ -514,7 +566,7 @@ Panel {
               badgeColor: root.urgent
               crossed: !pve.configured
               warning: pve.configured && pve.alarms > 0
-              busy: pve.busy
+              busy: pve.busySlow
             }
           }
         }
@@ -567,7 +619,15 @@ Panel {
         anchors.right: parent.right
         text: {
           if (!pve.configured) return "r retry   esc close"
-          if (root.inGuest) return "j/k move   h back   t console   o web ui   c copy   r refresh"
+          if (root.inNode) return "j/k move   h back   t console   o web ui   c copy   r refresh"
+          if (root.inGuest) {
+            // F only means anything for a QEMU guest — a container's console
+            // always targets its node, so there is no saved address or
+            // credential of its own to forget.
+            var isQemu = pve.selectedGuest && pve.selectedGuest.type === "qemu"
+            return "j/k move   h back   t console   o web ui   c copy"
+              + (isQemu ? "   F forget" : "") + "   r refresh"
+          }
           return "j/k move   ⏎ stats   t console   o web ui   / search   r refresh"
         }
         color: root.dim
@@ -638,17 +698,35 @@ Panel {
               fontFamily: root.fontFamily
             }
 
-            Loader {
-              id: rowLoader
+            // The highlight lives on the row slot rather than inside the row
+            // component, because the delegate knows its own index the moment
+            // it is constructed and the loaded component does not — its
+            // rowIndex arrives through the Binding below, one step later. Left
+            // inside, the selected row was built with rowIndex at its -1
+            // default and hasCursor false, then flipped true when the Binding
+            // landed, and CursorSurface animated that difference over 60ms.
+            // Every poll rebuilds these delegates, so that fade replayed on
+            // the selected row on every refresh.
+            CursorSurface {
               width: parent.width
-              sourceComponent: {
-                switch (rowItem.rowData.kind) {
-                case "guest": return guestComponent
-                case "node": return nodeComponent
-                case "meter": return meterComponent
-                case "kv": return kvComponent
+              height: rowLoader.implicitHeight
+              hasCursor: root.cursorActive && root.cursorIndex === rowItem.index
+              // Link rows stay painted as selected: a permanent affordance
+              // that the row is actionable, independent of the cursor.
+              current: !!(rowItem.rowData && rowItem.rowData.link)
+
+              Loader {
+                id: rowLoader
+                width: parent.width
+                sourceComponent: {
+                  switch (rowItem.rowData.kind) {
+                  case "guest": return guestComponent
+                  case "node": return nodeComponent
+                  case "meter": return meterComponent
+                  case "kv": return kvComponent
+                  }
+                  return noteComponent
                 }
-                return noteComponent
               }
             }
 
@@ -714,6 +792,11 @@ Panel {
 
   // A thin meter. Shared by node rows and the guest view so a bar means the
   // same thing wherever it appears.
+  // Deliberately not animated. Rows now update in place on every poll, so a
+  // bar redraws at its new value without anything rebuilding around it — and
+  // every attempt to animate across a rebuilt delegate cost more in flicker
+  // than the motion was worth. The seeded-and-remembered version is kept on
+  // the `smooth-meters` branch if gliding is ever wanted back.
   component Meter: Item {
     id: meter
     property real percent: 0
@@ -733,22 +816,18 @@ Panel {
       anchors.verticalCenter: meterTrack.verticalCenter
       height: meterTrack.height
       radius: meterTrack.radius
-      width: meterTrack.width * Util.clamp(meter.percent, 0, 1)
+      width: meterTrack.width * Util.clamp(Number(meter.percent) || 0, 0, 1)
       // Warn is the same colour at reduced strength rather than a second hue,
       // so a filling meter reads as "on the way there" instead of as a
       // different kind of problem.
       color: meter.level === "crit" ? root.urgent
         : (meter.level === "warn" ? Util.alpha(root.urgent, 0.75) : root.foreground)
-
-      Behavior on width {
-        NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
-      }
     }
   }
 
   // A guest: console button, LED, vmid, name over a status line, and the
   // figures at the right edge.
-  component GuestRow: CursorSurface {
+  component GuestRow: Item {
     id: entry
     property var row: null
     property int rowIndex: -1
@@ -757,10 +836,6 @@ Panel {
     readonly property bool isRdp: !!(row && row.console === "rdp")
     readonly property real consoleInset: Style.space(26)
 
-    hasCursor: root.cursorActive && root.cursorIndex === rowIndex
-    foreground: root.foreground
-    fill: root.hoverFill
-    currentFill: root.selectedFill
     implicitHeight: entryInner.implicitHeight + Style.spacing.lg
 
     Row {
@@ -868,15 +943,11 @@ Panel {
   // A node: name and hardware on the title line, then a labelled meter each
   // for CPU and memory. Two meters rather than one, because the number that
   // matters is usually memory and a single unlabelled bar never said which.
-  component NodeRow: CursorSurface {
+  component NodeRow: Item {
     id: nodeEntry
     property var row: null
     property int rowIndex: -1
 
-    hasCursor: root.cursorActive && root.cursorIndex === rowIndex
-    foreground: root.foreground
-    fill: root.hoverFill
-    currentFill: root.selectedFill
     implicitHeight: nodeInner.implicitHeight + Style.spacing.lg
 
     Column {
@@ -956,15 +1027,11 @@ Panel {
 
   // One figure in the guest view: label and percentage on a line, the bar
   // under it, the absolute numbers under that.
-  component MeterRow: CursorSurface {
+  component MeterRow: Item {
     id: meterEntry
     property var row: null
     property int rowIndex: -1
 
-    hasCursor: root.cursorActive && root.cursorIndex === rowIndex
-    foreground: root.foreground
-    fill: root.hoverFill
-    currentFill: root.selectedFill
     implicitHeight: meterInner.implicitHeight + Style.spacing.lg
 
     Column {
@@ -1021,15 +1088,11 @@ Panel {
 
   // A fact: label left, value right. One line, because these are things you
   // read once and none of them deserve two.
-  component KvRow: CursorSurface {
+  component KvRow: Item {
     id: kvEntry
     property var row: null
     property int rowIndex: -1
 
-    hasCursor: root.cursorActive && root.cursorIndex === rowIndex
-    foreground: root.foreground
-    fill: root.hoverFill
-    currentFill: root.selectedFill
     implicitHeight: kvInner.implicitHeight + Style.spacing.md
 
     Item {
@@ -1072,20 +1135,13 @@ Panel {
     }
   }
 
-  component NoteRow: CursorSurface {
+  component NoteRow: Item {
     id: note
     property var row: null
     property int rowIndex: -1
 
     readonly property bool isLink: !!(note.row && note.row.link)
 
-    hasCursor: root.cursorActive && root.cursorIndex === rowIndex
-    // Link notes are always painted selected — a permanent affordance that
-    // the row is actionable, with no dependence on hover or cursor state.
-    current: note.isLink
-    foreground: root.foreground
-    fill: root.hoverFill
-    currentFill: root.selectedFill
     implicitHeight: noteText.implicitHeight + Style.spacing.lg
 
     Text {

@@ -1,5 +1,24 @@
 # Omaprox — development notes
 
+## Next release backlog
+
+From the full security re-scan of 2026-08-17 (nothing here is exploitable
+as-is; optional hardening):
+
+- **`Text` elements default to `AutoText`.** API-derived strings that look
+  like HTML (a guest named `<b>pwned</b>`, an error message) render styled
+  in the panel. Cosmetic spoofing only — no code execution. Set
+  `textFormat: Text.PlainText` on the row/error/name texts.
+- **Warn on world-readable token file.** The README says `chmod 600` but
+  the plugin never checks. Stat `credentialsPath` and surface a warning in
+  the setup/error area when the file is group/other-readable.
+- **`ssh --` separator in `bin/omaprox-ssh`.** Belt-and-suspenders only —
+  OpenSSH 10.5 rejects option-parsing in the `user@host` form (tested).
+  Add `--` before `$TARGET` in `connect()` and `ssh-copy-id` anyway.
+- **`curlConfig` url quoting.** The host is interpolated into a quoted
+  config string without escaping. Only reachable through the user's own
+  config today; escape `"`/`\` if that surface ever widens.
+
 Things that cost time here, recorded so they do not cost it twice:
 
 - **Editing a `.js` file does not hot-reload.** Saving under
