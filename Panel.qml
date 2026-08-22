@@ -636,8 +636,13 @@ Panel {
 
           PanelHero {
             id: hero
-            // Narrowed so its trailing label ("2 ALERTS") ends clear of the pin.
-            width: parent.width - pinButton.width - Style.space(14)
+            // Narrowed so its trailing label ("2 ALERTS") ends clear of the
+            // pin — but only when there is a pin to stay clear of. An
+            // invisible item still reports its width, so reserving the gutter
+            // unconditionally left a button-sized hole at the right of the
+            // header on the multi-output sessions where the pin is hidden,
+            // with the alert pill stranded short of the edge.
+            width: parent.width - (pinButton.visible ? pinButton.width + Style.space(14) : 0)
             title: root.heroTitle
           meta: root.heroMeta
           detail: root.heroDetail
