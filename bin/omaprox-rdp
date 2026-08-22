@@ -16,6 +16,13 @@
 # vmid is what the answer is filed under: Proxmox keeps vmids unique across
 # the whole cluster, so it is enough on its own.
 #
+# The prompt asks four things — where to connect, who as, the password, the
+# domain — and ends by offering to remember a web page for the guest, which
+# the panel's web button then opens instead of the Proxmox page for the VM.
+# Every one of them is prefilled and takes Enter for "keep it", including the
+# address: an address the panel resolved is still a guess, and overruling one
+# used to mean editing shell.json by hand.
+#
 # Credentials live in the login keyring via libsecret, never in shell.json and
 # never on the command line: FreeRDP is handed its arguments with /args-from
 # reading a 0600 file, because /proc/<pid>/cmdline is world-readable and a /p:
@@ -42,26 +49,38 @@ if [[ -z $ADDRESS && -z $VMID ]]; then
 fi
 
 ADDRESSES_FILE=${XDG_CONFIG_HOME:-$HOME/.config}/omaprox/addresses
+# The guest's own web page, kept beside the addresses in a second file of the
+# same shape rather than as a second column in the first one. Two files of
+# `vmid = value` need no format, no parser and no migration; one file of
+# `vmid = address, url` needs all three the moment a URL contains a comma.
+WEBPAGES_FILE=${XDG_CONFIG_HOME:-$HOME/.config}/omaprox/webpages
 
-# `vmid = address`, one per line — the same store bin/omaprox-ssh writes to and
+# `vmid = value`, one per line — the same store bin/omaprox-ssh writes to and
 # the same `key = value` shape as the token file.
-lookup_address() {
-  [[ -n $VMID && -f $ADDRESSES_FILE ]] || return 1
+lookup_in() {
+  [[ -n $VMID && -f $1 ]] || return 1
   local v
-  v=$(sed -n "s/^[[:space:]]*${VMID}[[:space:]]*=[[:space:]]*//p" "$ADDRESSES_FILE" | tail -1)
+  v=$(sed -n "s/^[[:space:]]*${VMID}[[:space:]]*=[[:space:]]*//p" "$1" | tail -1)
   [[ -n $v ]] || return 1
   printf '%s' "$v"
 }
 
-store_address() {
+# An empty value removes the line rather than writing a blank one, so "clear
+# this" and "never set this" leave the file in the same state.
+store_in() {
   [[ -n $VMID ]] || return 0
-  mkdir -p "$(dirname "$ADDRESSES_FILE")"
+  mkdir -p "$(dirname "$1")"
   local tmp
-  tmp=$(mktemp "${ADDRESSES_FILE}.XXXXXX")
-  { [[ -f $ADDRESSES_FILE ]] && grep -vE "^[[:space:]]*${VMID}[[:space:]]*=" "$ADDRESSES_FILE"
-    printf '%s = %s\n' "$VMID" "$1"; } >"$tmp"
-  mv "$tmp" "$ADDRESSES_FILE"
+  tmp=$(mktemp "$1.XXXXXX")
+  { [[ -f $1 ]] && grep -vE "^[[:space:]]*${VMID}[[:space:]]*=" "$1"
+    [[ -n $2 ]] && printf '%s = %s\n' "$VMID" "$2"; } >"$tmp"
+  mv "$tmp" "$1"
 }
+
+lookup_address() { lookup_in "$ADDRESSES_FILE"; }
+store_address()  { store_in "$ADDRESSES_FILE" "$1"; }
+lookup_webpage() { lookup_in "$WEBPAGES_FILE"; }
+store_webpage()  { store_in "$WEBPAGES_FILE" "$1"; }
 
 # Fill in from the store before anything else runs, so a vmid that has already
 # been resolved once behaves exactly like an address the panel knew outright —
@@ -228,11 +247,45 @@ launch_watched() {
   return 0
 }
 
+# Every question is prefilled with the current answer and takes Enter for
+# "keep it", so correcting one of them never means retyping the rest.
+#
+# The address is asked here rather than only when it is missing. An address the
+# panel resolved is still a guess — the guest agent reports whichever interface
+# it feels like, and a VM with a docker bridge routinely offers 172.17.0.1 —
+# and before this, the only way to overrule one was to go and edit shell.json.
 ask() {
-  local default_user=$1 default_domain=$2
+  local default_user=$1 default_domain=$2 previous=$ADDRESS reply
+
   echo
-  echo "  $LABEL  ·  $ADDRESS"
+  echo "  $LABEL${ADDRESS:+  ·  $ADDRESS}"
   echo
+
+  if [[ -n $ADDRESS ]]; then
+    read -rp "  Address [$ADDRESS]: " reply
+  else
+    echo "  No known address for $LABEL${VMID:+ (vmid $VMID)}."
+    echo "  Asked once, then remembered in $ADDRESSES_FILE."
+    echo
+    read -rp "  Address or hostname: " reply
+  fi
+  reply=${reply// /}
+  if [[ -n $reply ]]; then ADDRESS=$reply; fi
+  if [[ -z $ADDRESS ]]; then
+    echo "  No address entered — nothing to connect to." >&2
+    exit 2
+  fi
+  if [[ $ADDRESS != "$previous" ]]; then
+    store_address "$ADDRESS"
+    # The keyring entry is filed under the address, so the credentials just
+    # offered belong to the machine we are no longer connecting to. Re-key
+    # first, then re-read: whatever is saved against the *new* address is what
+    # should be prefilled below.
+    set_schema
+    default_user=$(attribute username) || default_user=""
+    default_domain=$(attribute domain) || default_domain=""
+  fi
+
   if [[ -n $default_user ]]; then
     read -rp "  Username [$default_user]: " USERNAME
     USERNAME=${USERNAME:-$default_user}
@@ -245,6 +298,29 @@ ask() {
   # workgroup PC, so blank is offered as the answer rather than demanded.
   read -rp "  Domain (blank for a local account) [${default_domain:-none}]: " DOMAIN
   DOMAIN=${DOMAIN:-$default_domain}
+
+  # Last, because it is the one question that is not about connecting. A guest
+  # with a page of its own — a NAS, a router, anything with a web console —
+  # gets that page on the panel's web button instead of the Proxmox one.
+  #
+  # Saved as soon as it is answered rather than after a successful connect: it
+  # has nothing to do with whether the login worked, and losing it to a typo in
+  # the password would be a small, baffling thing to have to redo.
+  if [[ -n $VMID ]]; then
+    if [[ -n $WEBPAGE ]]; then
+      read -rp "  Web page [$WEBPAGE]  (- for none): " reply
+    else
+      read -rp "  Web page (blank for the Proxmox page): " reply
+    fi
+    reply=${reply// /}
+    if [[ $reply == "-" ]]; then
+      WEBPAGE=""
+      store_webpage ""
+    elif [[ -n $reply ]]; then
+      WEBPAGE=$reply
+      store_webpage "$WEBPAGE"
+    fi
+  fi
   echo
 }
 
@@ -281,21 +357,9 @@ fi
 
 # ---------------------------------------------------------------- terminal
 
-if [[ -z $ADDRESS ]]; then
-  echo
-  echo "  No known address for $LABEL (vmid $VMID)."
-  echo "  Asked once, then remembered in $ADDRESSES_FILE."
-  echo "  (Press F on the guest to be asked again.)"
-  echo
-  read -rp "  Address or hostname: " ADDRESS
-  if [[ -z $ADDRESS ]]; then
-    echo "  No address entered — nothing to connect to." >&2
-    exit 2
-  fi
-  echo
-  store_address "$ADDRESS"
-fi
-
+# The address is question one in ask() now, prefilled with whatever is known,
+# so there is no separate block for the case where nothing is — ask() prints
+# the explanation when it has no default to offer.
 set_schema
 
 ((HAVE_KEYRING)) || echo "  secret-tool not found — credentials cannot be saved."
@@ -303,6 +367,7 @@ set_schema
 USERNAME=$(attribute username) || USERNAME=""
 DOMAIN=$(attribute domain) || DOMAIN=""
 PASSWORD=""
+WEBPAGE=$(lookup_webpage) || WEBPAGE=""
 
 for attempt in 1 2 3; do
   ask "$USERNAME" "$DOMAIN"
@@ -314,19 +379,27 @@ for attempt in 1 2 3; do
       remember "$USERNAME" "$DOMAIN" "$PASSWORD" \
         && echo "  Saved to the login keyring — you will not be asked again." \
         || echo "  Could not save to the keyring."
+      [[ -n $WEBPAGE ]] && echo "  Web button for $LABEL opens $WEBPAGE."
       exit 0
       ;;
     2)
       echo "cannot reach $ADDRESS"
-      echo
-      if [[ -n $VMID ]]; then
-        echo "  Wrong address? Press F on this guest to be asked again, or set a"
-        echo "  fixed one yourself in ~/.config/omarchy/shell.json:"
-        echo '    { "id": "io.github.andressm415.omaprox", "addresses": { "'"$VMID"'": "<ip>" } }'
+      # Not fatal any more. The address is the first thing ask() offers, so the
+      # obvious response to "cannot reach" — try a different one — is now a
+      # loop rather than a closed window and a second trip through the panel.
+      if [[ $attempt -lt 3 ]]; then
+        echo "  Wrong address? Enter another one, or Ctrl-C to give up."
+      else
         echo
+        if [[ -n $VMID ]]; then
+          echo "  Still unreachable. To pin one by hand instead, put it in"
+          echo "  ~/.config/omarchy/shell.json:"
+          echo '    { "id": "io.github.andressm415.omaprox", "addresses": { "'"$VMID"'": "<ip>" } }'
+          echo
+        fi
+        read -rp "  press enter to close "
+        exit 1
       fi
-      read -rp "  press enter to close "
-      exit 1
       ;;
     *)
       echo "rejected"

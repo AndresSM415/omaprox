@@ -320,6 +320,7 @@ Panel {
       if (row.link) pve.openUrl(row.link)
       return
     }
+    if (row.action) { runRowAction(row.action); return }
     // From the list, Enter drills into a guest or a node; once inside, it has
     // nowhere left to go and opens the web UI instead.
     if (!inGuest && !inNode && (row.kind === "guest" || row.kind === "node")) {
@@ -327,6 +328,16 @@ Panel {
       return
     }
     openWebUi()
+  }
+
+  // The SESSION rows in the guest view. `forget` deliberately leaves the panel
+  // open: it has something to say afterwards, and closing over the top of the
+  // status line would make it an action with no visible outcome.
+  function runRowAction(action) {
+    var guest = actionGuest
+    if (!guest) return
+    if (action === "web") { pve.openWebUi(guest); close(); return }
+    if (action === "forget") pve.forgetCredentials(guest)
   }
 
   function openWebUi() {
@@ -628,16 +639,19 @@ Panel {
         anchors.right: parent.right
         text: {
           if (!pve.configured) return "r retry   esc close"
-          if (root.inNode) return "j/k move   h back   t console   o web ui   c copy   r refresh"
+          // "web" rather than "web ui": with a page pinned to the guest this
+          // key stops going to Proxmox, and a legend still promising the
+          // Proxmox UI would be describing the behaviour it replaced.
+          if (root.inNode) return "j/k move   h back   t console   o web   c copy   r refresh"
           if (root.inGuest) {
             // F only means anything for a QEMU guest — a container's console
             // always targets its node, so there is no saved address or
             // credential of its own to forget.
             var isQemu = pve.selectedGuest && pve.selectedGuest.type === "qemu"
-            return "j/k move   h back   t console   o web ui   c copy"
+            return "j/k move   h back   t console   o web   c copy"
               + (isQemu ? "   F forget" : "") + "   r refresh"
           }
-          return "j/k move   ⏎ stats   t console   o web ui   / search   r refresh"
+          return "j/k move   ⏎ stats   t console   o web   / search   r refresh"
         }
         color: root.dim
         font.family: root.fontFamily
@@ -720,9 +734,11 @@ Panel {
               width: parent.width
               height: rowLoader.implicitHeight
               hasCursor: root.cursorActive && root.cursorIndex === rowItem.index
-              // Link rows stay painted as selected: a permanent affordance
-              // that the row is actionable, independent of the cursor.
-              current: !!(rowItem.rowData && rowItem.rowData.link)
+              // Link rows and action rows stay painted as selected: a
+              // permanent affordance that the row is actionable, independent
+              // of the cursor. A fact and a button look identical until one of
+              // them says otherwise.
+              current: !!(rowItem.rowData && (rowItem.rowData.link || rowItem.rowData.action))
 
               Loader {
                 id: rowLoader
@@ -883,7 +899,16 @@ Panel {
 
     readonly property bool hasConsole: !!(row && row.console !== "none")
     readonly property bool isRdp: !!(row && row.console === "rdp")
-    readonly property real consoleInset: Style.space(26)
+    readonly property bool isGuest: !!(row && row.vtype !== "node")
+    readonly property var guest: row ? row.guest : null
+    // Whether this guest's web button goes somewhere of its own or to the
+    // Proxmox page for it. Both are worth a button; only one is worth saying
+    // out loud.
+    readonly property bool hasOwnPage: !!(entry.guest && pve.hasCustomWebPage(entry.guest))
+    // Room for both buttons. Widening the inset rather than overlaying them
+    // keeps the name column starting at the same x on every row, which is what
+    // makes the list scannable at all.
+    readonly property real consoleInset: Style.space(46)
 
     implicitHeight: entryInner.implicitHeight + Style.spacing.lg
 
@@ -964,7 +989,8 @@ Panel {
     // losing it — a row that changes width when a guest shuts down makes the
     // whole list jump.
     PanelActionButton {
-      visible: !!(entry.row && entry.row.vtype !== "node")
+      id: consoleButton
+      visible: entry.isGuest
       enabled: entry.hasConsole
       anchors.left: parent.left
       anchors.leftMargin: Style.space(3)
@@ -984,7 +1010,37 @@ Panel {
       bordered: true
       onClicked: {
         root.setCursor(entry.rowIndex)
-        if (entry.row && entry.row.guest) { pve.openConsole(entry.row.guest); root.close() }
+        if (entry.guest) { pve.openConsole(entry.guest); root.close() }
+      }
+    }
+
+    // The guest's page in a browser. Unlike the console this stays live on a
+    // stopped guest — the Proxmox page for a VM that will not boot is exactly
+    // the page you want — so it is never dimmed.
+    PanelActionButton {
+      visible: entry.isGuest
+      anchors.left: consoleButton.right
+      anchors.leftMargin: Style.space(3)
+      anchors.verticalCenter: parent.verticalCenter
+      iconText: Model.glyphFor("web")
+      tooltipText: {
+        if (!entry.row) return ""
+        return entry.hasOwnPage
+          ? "Open " + pve.guestWebUrl(entry.guest)
+          : "Open " + entry.row.name + " in the Proxmox web UI"
+      }
+      // A guest with a page of its own gets the brighter of the two states at
+      // rest: it is the one row in a list of Proxmox links that goes somewhere
+      // else, and that is worth noticing without hovering for it.
+      foreground: entry.hasOwnPage ? root.foreground : root.dim
+      hoverColor: root.foreground
+      fontFamily: root.fontFamily
+      fontSize: Style.font.bodySmall
+      size: Style.space(20)
+      bordered: true
+      onClicked: {
+        root.setCursor(entry.rowIndex)
+        if (entry.guest) { pve.openWebUi(entry.guest); root.close() }
       }
     }
   }
@@ -1156,6 +1212,8 @@ Panel {
     property var row: null
     property int rowIndex: -1
 
+    readonly property bool isAction: !!(kvEntry.row && kvEntry.row.action)
+
     implicitHeight: kvInner.implicitHeight + Style.spacing.md
 
     Item {
@@ -1182,7 +1240,8 @@ Panel {
       Text {
         id: kvValue
         anchors.left: kvTitle.right
-        anchors.right: parent.right
+        anchors.right: kvGlyph.visible ? kvGlyph.left : parent.right
+        anchors.rightMargin: kvGlyph.visible ? Style.space(6) : 0
         anchors.verticalCenter: parent.verticalCenter
         text: kvEntry.row ? String(kvEntry.row.value || "") : ""
         color: {
@@ -1194,6 +1253,31 @@ Panel {
         font.family: root.fontFamily
         font.pixelSize: Style.font.bodySmall
         elide: Text.ElideRight
+      }
+
+      // The right edge, where a row that does something says so in one
+      // character rather than in more prose at the end of the value.
+      Text {
+        id: kvGlyph
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        visible: text !== ""
+        text: kvEntry.row ? String(kvEntry.row.glyph || "") : ""
+        color: root.dim
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.bodySmall
+      }
+    }
+
+    MouseArea {
+      anchors.fill: parent
+      enabled: kvEntry.isAction
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onEntered: root.setCursor(kvEntry.rowIndex)
+      onClicked: {
+        root.setCursor(kvEntry.rowIndex)
+        root.runRowAction(kvEntry.row.action)
       }
     }
   }

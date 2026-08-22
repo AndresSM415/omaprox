@@ -58,6 +58,20 @@ store_address() {
   mv "$tmp" "$ADDRESSES_FILE"
 }
 
+# The guest's own web page, in a second file of the same shape — see
+# bin/omaprox-rdp, which asks the same question and writes the same store.
+WEBPAGES_FILE=${XDG_CONFIG_HOME:-$HOME/.config}/omaprox/webpages
+
+store_webpage() {
+  [[ -n $VMID ]] || return 0
+  mkdir -p "$(dirname "$WEBPAGES_FILE")"
+  local tmp
+  tmp=$(mktemp "${WEBPAGES_FILE}.XXXXXX")
+  { [[ -f $WEBPAGES_FILE ]] && grep -vE "^[[:space:]]*${VMID}[[:space:]]*=" "$WEBPAGES_FILE"
+    [[ -n $1 ]] && printf '%s = %s\n' "$VMID" "$1"; } >"$tmp"
+  mv "$tmp" "$WEBPAGES_FILE"
+}
+
 if [[ -z $HOST && -n $VMID ]]; then
   HOST=$(lookup_address) || HOST=""
   if [[ -z $HOST ]]; then
@@ -73,6 +87,15 @@ if [[ -z $HOST && -n $VMID ]]; then
     fi
     echo
     store_address "$HOST"
+
+    # Asked only here, inside the block that was already going to interrupt
+    # you. A guest whose address is known connects in silence, and adding a
+    # question to that path would trade the feature's whole point — one prompt,
+    # once — for a second one on every console.
+    read -rp "  Web page for this guest (blank for the Proxmox page): " webpage
+    webpage=${webpage// /}
+    [[ -n $webpage ]] && store_webpage "$webpage"
+    echo
   fi
 fi
 

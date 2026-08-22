@@ -164,6 +164,39 @@ function webUiNodeUrl(host, node) {
   return normalizeHost(host) + "/#v1:0:=node%2F" + encodeURIComponent(node);
 }
 
+// Where a guest's web button goes. Plenty of guests are a thing you visit as
+// much as a thing you log into — a NAS, a router, Home Assistant — and for
+// those the Proxmox panel for the VM is one click short of where you were
+// actually going. The page is answered at the console prompt, so this is the
+// same string the user already typed once, and the Proxmox deep link stays the
+// answer for every guest that never had one.
+function guestWebUrl(host, guest, custom) {
+  var url = normalizeWebUrl(custom);
+  if (url !== "") return url;
+  if (!host || !guest) return "";
+  return webUiGuestUrl(host, guest.type, guest.vmid);
+}
+
+// `nas.lan:5000` is what people type, and handing that to a browser as written
+// makes it a search rather than a destination. Anything carrying a scheme that
+// is not http(s) is refused rather than guessed at: this string is passed to
+// omarchy-launch-browser, and `file://` or `javascript:` are not web pages
+// anyone meant to pin to a VM.
+function normalizeWebUrl(value) {
+  var url = String(value || "").trim();
+  if (url === "") return "";
+  if (/^https?:\/\//i.test(url)) return url;
+  // `nas.lan:5000` is a host and a port, not a scheme. The two are the same
+  // grammar right up to the colon — dots and all — so what follows it is what
+  // decides: digits are a port, anything else is a scheme, and a scheme that
+  // is not http(s) is refused rather than guessed at. A NAS on a high port is
+  // the single most likely thing anyone types here, and reading it as
+  // `nas.lan:` + garbage would refuse the common case.
+  if (/^[a-z][a-z0-9+.-]*:\d+(?:[\/?#]|$)/i.test(url)) return "https://" + url;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return "";
+  return "https://" + url;
+}
+
 // ---------------------------------------------------------------- transport
 
 // curl config text for `curl -K -`. Only the token travels this way: argv is

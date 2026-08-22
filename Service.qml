@@ -161,6 +161,17 @@ Item {
   }
   property var resolvedAddresses: ({})
 
+  // The page a guest's web button opens, when it has one of its own. Answered
+  // at the same console prompt as the address, filed under the same vmid, and
+  // kept in a second file of the same `vmid = value` shape — see
+  // bin/omaprox-rdp for why this is two files and not two columns.
+  readonly property string webPageStorePath: {
+    var xdg = Quickshell.env("XDG_CONFIG_HOME")
+    if (!xdg || xdg === "") xdg = Quickshell.env("HOME") + "/.config"
+    return xdg + "/omaprox/webpages"
+  }
+  property var webPages: ({})
+
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
     return value === undefined || value === null ? fallback : value
@@ -191,6 +202,16 @@ Item {
       guestStatus: guestStatus,
       nodeStatus: nodeStatus,
       consoleAddress: selectedAddress,
+      // Whether the address on screen is one someone typed at the prompt or
+      // one the cluster reported. The difference is the first thing worth
+      // knowing when the console will not connect.
+      addressPinned: selectedGuest
+        ? !!resolvedAddresses[String(selectedGuest.vmid)] : false,
+      webUrl: guestWebUrl(selectedGuest),
+      webCustom: hasCustomWebPage(selectedGuest),
+      // Only a QEMU guest has console state of its own to drop; see
+      // forgetCredentials.
+      canForget: !!(selectedGuest && selectedGuest.type === "qemu"),
       thresholds: { memWarn: memWarn, memClear: memClear },
       alarmMemo: alarmMemo,
       showTemplates: showTemplates,
@@ -251,6 +272,18 @@ Item {
     // Absence is the normal state until the first console helper writes to
     // it — nothing to report, just nothing stored yet.
     onLoadFailed: root.resolvedAddresses = ({})
+  }
+
+  // Same file shape, same parser, same "absence is normal" — a URL is a value
+  // keyed by vmid exactly as an address is.
+  FileView {
+    id: webPageStoreFile
+    path: root.webPageStorePath
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.webPages = Api.parseAddressStore(text())
+    onLoadFailed: root.webPages = ({})
   }
 
   // Belt and suspenders for the watcher gap above: even with the directory
@@ -746,9 +779,23 @@ Item {
     onExited: function(exitCode) { root.rdpAvailable = exitCode === 0 }
   }
 
+  // Where a guest's web button goes: the page answered at the console prompt
+  // if it has one, and its page in the Proxmox UI otherwise.
+  function guestWebUrl(guest) {
+    if (!guest) return ""
+    return Api.guestWebUrl(host, guest, webPages[String(guest.vmid)] || "")
+  }
+
+  function hasCustomWebPage(guest) {
+    if (!guest) return false
+    return Api.normalizeWebUrl(webPages[String(guest.vmid)] || "") !== ""
+  }
+
   function openWebUi(guest) {
-    if (!guest || host === "") return
-    openUrl(Api.webUiGuestUrl(host, guest.type, guest.vmid))
+    if (!guest) return
+    var url = guestWebUrl(guest)
+    if (url === "") return
+    openUrl(url)
   }
 
   function openNodeWebUi(node) {

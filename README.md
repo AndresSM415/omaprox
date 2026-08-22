@@ -87,10 +87,10 @@ stats. `o` opens the Proxmox web UI at the selected guest.
 | `l` / Enter | open a guest's stats; on a node, the web UI |
 | `h` / Escape | back out one level, then close the panel |
 | `t` | console — terminal for a node or Linux guest, remote desktop for Windows |
-| `o` | open the Proxmox web UI at this guest |
+| `o` | open this guest in a browser — its own page if it has one, else the Proxmox web UI |
 | `c` | copy the address |
 | `/` | search by name, vmid, node or OS |
-| `F` | forget a Windows guest's saved address and password (asks again next time) |
+| `F` | forget a QEMU guest's saved address and password (asks again next time) |
 | `r` | refresh now |
 | `Tab` | move to the next bar panel |
 
@@ -125,25 +125,52 @@ public key, and every connection after that is silent. Say no and it just
 asks each time. No SSH password is ever stored — an authorized key is the
 better version of "remember me".
 
-**First time on a Windows guest**, the helper asks for username, password
-and domain (blank for a local account), verifies them, and saves the
-password to your login keyring. Later connections go straight to the
-desktop. A saved password the server rejects is deleted and asked for
-again.
+**First time on a Windows guest**, the helper asks where to connect, for a
+username, password and domain (blank for a local account), verifies them,
+and saves the password to your login keyring. Later connections go straight
+to the desktop. A saved password the server rejects is deleted and asked
+for again.
 
-**Got the wrong address, or need to redo credentials?** Press `F` on a
-Windows guest to forget its saved address and password — the next console
-attempt asks for both again, fresh. Linux guests have nothing to forget
-this way: an installed SSH key is authorization granted on the guest
-itself, not a secret held here, so it is removed from that account's
-`~/.ssh/authorized_keys` on the guest, not through Omaprox. You can also
-inspect or clear stored state directly:
+Every question is prefilled with the current answer and takes Enter for
+"keep it", the address included — an address the panel resolved is still a
+guess, and a VM with a docker bridge routinely reports the wrong one. If
+the address turns out to be unreachable you are asked again rather than
+dropped, so a typo costs one line instead of a second trip through the
+panel.
+
+**Got the wrong address, or need to redo credentials?** Open the guest and
+press `F`, or click **Saved sign-in** under SESSION, to forget its saved
+address and password — the next console attempt asks for both again, fresh.
+Linux guests have nothing to forget this way: an installed SSH key is
+authorization granted on the guest itself, not a secret held here, so it is
+removed from that account's `~/.ssh/authorized_keys` on the guest, not
+through Omaprox. You can also inspect or clear stored state directly:
 
 ```bash
 cat ~/.config/omaprox/addresses                     # vmid = address, one per line
+cat ~/.config/omaprox/webpages                      # vmid = url, one per line
 secret-tool search service omaprox                  # attributes print on stderr
 secret-tool clear service omaprox host 192.168.1.50
 ```
+
+## Web pages
+
+Every guest row has a second button beside its console one, and `o` does the
+same thing: it opens that guest in a browser. By default that is the guest's
+page in the Proxmox web UI.
+
+Plenty of guests are a thing you visit as much as a thing you log into — a
+NAS, a router, Home Assistant — and for those the Proxmox page is one click
+short of where you were going. The last question the console prompt asks is
+whether this guest has a page of its own; answer it and the button goes
+there instead. The row's button brightens to say so, and the guest view
+names the destination under SESSION.
+
+Answer `-` at that prompt to clear it and go back to the Proxmox page. A
+bare `nas.lan:5000` is fine — the scheme is filled in. Linux guests are
+asked the same question, but only at the one moment they already prompt
+(the first connection, when the address is unknown), so a console that
+works today never grows a new question.
 
 Console dependencies: `openssh` for nodes, containers and Linux VMs,
 `xfreerdp3` and `secret-tool` for Windows VMs.

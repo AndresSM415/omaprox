@@ -99,6 +99,8 @@ function glyphFor(kind) {
   case "windows":  return ""  // windows
   case "linux":    return ""  // linux
   case "lock":     return ""  // lock
+  case "web":      return "\uf0ac"  // globe
+  case "reset":    return "\uf021"  // refresh
   }
   return ""                   // cubes
 }
@@ -587,8 +589,14 @@ function buildGuestView(state) {
     facts.push({ kind: "kv", key: key + "/os", title: "OS", value: config.osLabel, selectable: true })
 
   var address = state.consoleAddress || ""
-  if (address !== "")
-    facts.push({ kind: "kv", key: key + "/addr", title: "Address", value: address, selectable: true })
+  if (address !== "") {
+    // Saying where the address came from is the difference between "the
+    // cluster reported this" and "you told it this" — which is the first
+    // thing worth knowing when the console will not connect.
+    facts.push({ kind: "kv", key: key + "/addr", title: "Address",
+      value: address + (state.addressPinned ? "  ·  set at the prompt" : ""),
+      selectable: true })
+  }
 
   if (guest.type === "qemu" && config) {
     facts.push({ kind: "kv", key: key + "/agent", title: "Agent",
@@ -610,6 +618,44 @@ function buildGuestView(state) {
     facts.push({ kind: "kv", key: key + "/lock", title: "Lock", value: guest.lock, tone: "warn", selectable: true })
 
   groups.push({ title: "GUEST", rows: facts })
+
+  // What this panel can do to the guest's *session* — which is to say, to this
+  // machine's idea of the guest. Nothing here touches the cluster.
+  //
+  // Both of these already existed as things the plugin could do; neither was
+  // anywhere on screen. `F` forgets a guest's console state, and the web
+  // button has always gone somewhere — but a keybinding named only in a legend
+  // and a destination you cannot see are not the same as being told what they
+  // are.
+  var actions = []
+
+  actions.push({
+    kind: "kv", key: key + "/web", title: "Web page",
+    value: state.webCustom
+      ? String(state.webUrl)
+      // Wording sized to the row: the value column elides past roughly forty
+      // characters, and a hint that gets cut in half is not a hint.
+      : "Proxmox page  ·  set one at the prompt",
+    tone: state.webCustom ? "normal" : "dim",
+    glyph: glyphFor("web"), action: "web", selectable: true
+  })
+
+  // Only where there is something to drop. A container's console targets its
+  // node and holds no address or credential of its own, and an SSH guest keeps
+  // no password anywhere — omaprox-ssh installs a key instead, and a key is
+  // revoked on the server that trusts it, not from a panel on this one.
+  if (state.canForget) {
+    actions.push({
+      // "Sign-in" rather than "Saved sign-in": the title column is 74px and
+      // elides the longer one to "Saved sign…", which reads as a truncation
+      // bug rather than a label.
+      kind: "kv", key: key + "/forget", title: "Sign-in",
+      value: "forget the address and password  ·  F",
+      tone: "dim", glyph: glyphFor("reset"), action: "forget", selectable: true
+    })
+  }
+
+  groups.push({ title: "SESSION", rows: actions })
 
   return flatten(groups)
 }
