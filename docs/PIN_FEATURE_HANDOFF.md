@@ -16,13 +16,20 @@ other apps normally (especially typing).
 - **Done.** Pinned, the panel stays up; clicking another window focuses it and
   gives it the keyboard; clicking back on the card returns the keyboard to the
   panel and `j`/`k` work again.
+- **Gated.** Because of the issue below, the pin is only offered when
+  `Quickshell.screens.length <= 1`. On more than one output the button and the
+  `p` key are gone, and a panel that is pinned when a second monitor arrives
+  unpins itself. Shipping it half-working reads as a broken desktop rather than
+  a limited feature.
 - **Open:** on a multi-monitor setup, clicks on whichever monitor the panel is
-  *not* on are still swallowed while pinned. See "Remaining issue" below.
-  Single-monitor setups are unaffected.
+  *not* on would be swallowed while pinned. See "Remaining issue" below.
 
   This is not laptop-versus-external. The bar runs on every output, so the
   panel opens on whichever bar you clicked, and that output is the one that
   works — verified in both directions on the same session.
+- **Upstream:** a `dismissable` property for `qs.Ui.KeyboardPanel` is written
+  and verified against a patched shell on this hardware; once it lands, drop
+  the gate and set `dismissable: !pinned` instead of the mask override.
 
 ## What the problem actually was
 

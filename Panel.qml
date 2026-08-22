@@ -55,6 +55,21 @@ Panel {
   // where it is until unpinned or explicitly closed from the bar icon.
   property bool pinned: false
 
+  // Pinning is only offered on a single-output session.
+  //
+  // The panel narrows its input region to the card while pinned, which hands
+  // the rest of *its own* screen back to the windows underneath. It cannot do
+  // the same for the other outputs: KeyboardPanel blankets each of them with a
+  // full-screen surface whose only job is to catch a click and dismiss, and
+  // those are created inside the component with nothing reachable from here.
+  // So on a second monitor a pinned panel silently eats every click, which is
+  // a worse thing to ship than not offering the button — a pin that half works
+  // reads as the desktop being broken, not as the pin being limited.
+  //
+  // Lifting this needs `dismissable` in qs.Ui.KeyboardPanel (patch submitted
+  // upstream); see docs/PIN_FEATURE_HANDOFF.md.
+  readonly property bool pinAvailable: Quickshell.screens.length <= 1
+
   // Last drawn level per meter key. Node rows render their meters through a
   // Repeater over `row.meters`, and that array is rebuilt on every poll, so
   // those delegates are destroyed and recreated rather than updated in place.
@@ -379,8 +394,14 @@ Panel {
   // The address is the thing you actually paste somewhere else; the vmid is
   // only ever useful inside Proxmox, where you already are.
   function togglePin() {
+    if (!pinAvailable) return
     pinned = !pinned
   }
+
+  // Plugging in a second monitor while the panel is pinned would leave it
+  // holding every click on the new output, so the pin drops itself the moment
+  // it stops being something this can do correctly.
+  onPinAvailableChanged: if (!pinAvailable) pinned = false
 
   function copyCurrent() {
     var row = currentRow
@@ -637,6 +658,7 @@ Panel {
 
           PanelActionButton {
             id: pinButton
+            visible: root.pinAvailable
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             iconText: Model.glyphFor("pin")
@@ -710,7 +732,8 @@ Panel {
             return "j/k move   h back   t console   o web ui   c copy"
               + (isQemu ? "   F forget" : "") + "   r refresh"
           }
-          return "j/k move   ⏎ stats   t console   o web ui   / search   p pin   r refresh"
+          return "j/k move   ⏎ stats   t console   o web ui   / search"
+            + (root.pinAvailable ? "   p pin" : "") + "   r refresh"
         }
         color: root.dim
         font.family: root.fontFamily

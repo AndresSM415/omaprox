@@ -107,11 +107,14 @@ bar icon, or send the IPC `hide`.
 
 While pinned, everything outside the card goes back to being other windows':
 click one and it focuses and takes the keyboard as usual, with the dashboard
-still on screen beside it. Click the card again to drive it with `j`/`k`. The
-one gap is a second monitor: the panel's dismissal surface still covers the
-outputs it is not on, so clicks there are swallowed until you unpin. The bar
-runs on every output, so opening the panel from the bar on the screen you are
-working on puts the working half where you want it.
+still on screen beside it. Click the card again to drive it with `j`/`k`.
+
+The pin is only offered on a single-monitor session, and the button and its key
+disappear when a second output is connected. The panel can hand back its own
+screen but not the others: the shell's panel component covers every other
+output with a full-screen surface whose only job is to catch a click and
+dismiss, and a pinned panel would swallow every click there. Lifting this needs
+a change in Omarchy's own `KeyboardPanel` — see `docs/PIN_FEATURE_HANDOFF.md`.
 
 **Status lights** use form and brightness rather than colour, so they read
 well in monochrome themes: filled = running, hollow ring = stopped, dimmed =
