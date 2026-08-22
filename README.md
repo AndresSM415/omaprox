@@ -101,6 +101,21 @@ and `r` still refreshes on demand when a poll is too far away.
 Mouse: left click toggles the panel, right click refreshes, middle click
 opens the web UI.
 
+**Pin:** press `p` or the pin button at the top of the panel and it stays put —
+outside clicks and a final `esc` are ignored until you unpin, close it from the
+bar icon, or send the IPC `hide`.
+
+While pinned, everything outside the card goes back to being other windows':
+click one and it focuses and takes the keyboard as usual, with the dashboard
+still on screen beside it. Click the card again to drive it with `j`/`k`.
+
+The pin is only offered on a single-monitor session, and the button and its key
+disappear when a second output is connected. The panel can hand back its own
+screen but not the others: the shell's panel component covers every other
+output with a full-screen surface whose only job is to catch a click and
+dismiss, and a pinned panel would swallow every click there. Lifting this needs
+a change in Omarchy's own `KeyboardPanel` — see `docs/PIN_FEATURE_HANDOFF.md`.
+
 **Status lights** use form and brightness rather than colour, so they read
 well in monochrome themes: filled = running, hollow ring = stopped, dimmed =
 paused, red = something needs attention — a running guest over its memory

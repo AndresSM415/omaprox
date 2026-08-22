@@ -101,6 +101,7 @@ function glyphFor(kind) {
   case "lock":     return ""  // lock
   case "web":      return "\uf0ac"  // globe
   case "reset":    return "\uf021"  // refresh
+  case "pin":      return ""  // thumb tack
   }
   return ""                   // cubes
 }

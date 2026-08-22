@@ -51,6 +51,25 @@ Panel {
   // that makes a drill-down feel like a maze.
   property int overviewCursor: 0
 
+  // Pinned: the panel ignores outside clicks (and a final Escape) and stays
+  // where it is until unpinned or explicitly closed from the bar icon.
+  property bool pinned: false
+
+  // Pinning is only offered on a single-output session.
+  //
+  // The panel narrows its input region to the card while pinned, which hands
+  // the rest of *its own* screen back to the windows underneath. It cannot do
+  // the same for the other outputs: KeyboardPanel blankets each of them with a
+  // full-screen surface whose only job is to catch a click and dismiss, and
+  // those are created inside the component with nothing reachable from here.
+  // So on a second monitor a pinned panel silently eats every click, which is
+  // a worse thing to ship than not offering the button — a pin that half works
+  // reads as the desktop being broken, not as the pin being limited.
+  //
+  // Lifting this needs `dismissable` in qs.Ui.KeyboardPanel (patch submitted
+  // upstream); see docs/PIN_FEATURE_HANDOFF.md.
+  readonly property bool pinAvailable: Quickshell.screens.length <= 1
+
   // Last drawn level per meter key. Node rows render their meters through a
   // Repeater over `row.meters`, and that array is rebuilt on every poll, so
   // those delegates are destroyed and recreated rather than updated in place.
@@ -220,6 +239,23 @@ Panel {
 
   // ------------------------------------------------------------- navigation
 
+  // Outside-click dismissal routes through KeyboardPanel.close() ->
+  // owner.close(), i.e. through here. While pinned it is a no-op; every
+  // explicit close (bar icon toggle, IPC) goes via forceClose() instead.
+  function close() {
+    if (!pinned) controller.hide()
+  }
+
+  function forceClose() {
+    pinned = false
+    controller.hide()
+  }
+
+  function toggle() {
+    if (opened) forceClose()
+    else open()
+  }
+
   function selectableAt(index) {
     if (index < 0 || index >= rows.length) return false
     return rows[index].selectable !== false
@@ -368,6 +404,16 @@ Panel {
 
   // The address is the thing you actually paste somewhere else; the vmid is
   // only ever useful inside Proxmox, where you already are.
+  function togglePin() {
+    if (!pinAvailable) return
+    pinned = !pinned
+  }
+
+  // Plugging in a second monitor while the panel is pinned would leave it
+  // holding every click on the new output, so the pin drops itself the moment
+  // it stops being something this can do correctly.
+  onPinAvailableChanged: if (!pinAvailable) pinned = false
+
   function copyCurrent() {
     var row = currentRow
     if (!row) return
@@ -429,9 +475,9 @@ Panel {
   IpcHandler {
     target: root.ipcTarget
     function open(): void { root.open() }
-    function close(): void { root.close() }
+    function close(): void { root.forceClose() }
     function show(): void { root.open() }
-    function hide(): void { root.close() }
+    function hide(): void { root.forceClose() }
     function toggle(): void { root.toggle() }
     function refresh(): string { pve.refresh(); return "ok" }
     function status(): string {
@@ -535,6 +581,29 @@ Panel {
       headerColumn.implicitHeight + Style.space(18) + list.contentHeight + legend.implicitHeight,
       Style.space(760))
 
+    // While pinned, hand the rest of the screen back to whatever is under it.
+    //
+    // KeyboardPanel's own mask is the whole screen, because that is what makes
+    // outside-click dismissal possible: the overlay has to receive the click
+    // in order to close on it. A pinned panel does not close on it, so all
+    // that fullscreen input region does is swallow every click meant for
+    // another window.
+    //
+    // That swallowing is also why a pinned panel appeared to hold the keyboard
+    // hostage. The layer's steady state is OnDemand focus, and Hyprland moves
+    // keyboard focus off an OnDemand surface when you click a toplevel — but
+    // the click never reached one to be clicked. Nothing was wrong with the
+    // focus mode; the pointer was being intercepted before the compositor was
+    // ever asked to move focus. Narrowing the region to the card fixes both at
+    // once, and the panel then behaves like any other surface: click the card
+    // to drive it with the keyboard, click anything else to type there.
+    mask: Region {
+      x: root.pinned ? panel.cardOrigin.x : 0
+      y: root.pinned ? panel.cardOrigin.y : 0
+      width: root.pinned ? panel.contentWidth : panel.screenW
+      height: root.pinned ? panel.contentHeight : panel.screenH
+    }
+
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
@@ -558,6 +627,7 @@ Panel {
         else if (t === "o") root.openWebUi()
         else if (t === "c") root.copyCurrent()
         else if (t === "F") pve.forgetCredentials(root.actionGuest)
+        else if (t === "p") root.togglePin()
       }
 
       // Header pinned to the top, legend pinned to the bottom, list filling
@@ -570,10 +640,21 @@ Panel {
         anchors.right: parent.right
         spacing: Style.space(10)
 
-        PanelHero {
-          id: hero
+        Item {
+          id: pinRowHost
           width: parent.width
-          title: root.heroTitle
+          height: pinButton.height
+
+          PanelHero {
+            id: hero
+            // Narrowed so its trailing label ("2 ALERTS") ends clear of the
+            // pin — but only when there is a pin to stay clear of. An
+            // invisible item still reports its width, so reserving the gutter
+            // unconditionally left a button-sized hole at the right of the
+            // header on the multi-output sessions where the pin is hidden,
+            // with the alert pill stranded short of the edge.
+            width: parent.width - (pinButton.visible ? pinButton.width + Style.space(14) : 0)
+            title: root.heroTitle
           meta: root.heroMeta
           detail: root.heroDetail
           foreground: root.foreground
@@ -588,6 +669,25 @@ Panel {
               warning: pve.configured && pve.alarms > 0
               busy: pve.busySlow
             }
+          }
+          }
+
+          PanelActionButton {
+            id: pinButton
+            visible: root.pinAvailable
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            iconText: Model.glyphFor("pin")
+            tooltipText: root.pinned
+              ? "Unpin — outside clicks will dismiss"
+              : "Pin — keep the panel open"
+            foreground: root.pinned ? root.foreground : root.dim
+            hoverColor: root.foreground
+            fontFamily: root.fontFamily
+            fontSize: Style.font.bodySmall
+            size: Style.space(20)
+            bordered: root.pinned
+            onClicked: root.togglePin()
           }
         }
 
@@ -651,7 +751,8 @@ Panel {
             return "j/k move   h back   t console   o web   c copy"
               + (isQemu ? "   F forget" : "") + "   r refresh"
           }
-          return "j/k move   ⏎ stats   t console   o web   / search   r refresh"
+          return "j/k move   ⏎ stats   t console   o web   / search"
+            + (root.pinAvailable ? "   p pin" : "") + "   r refresh"
         }
         color: root.dim
         font.family: root.fontFamily
