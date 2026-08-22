@@ -1033,18 +1033,27 @@ Panel {
         }
       }
 
+      // Count-driven, not array-driven. `row.meters` is a fresh array on
+      // every poll, and binding the Repeater to it destroyed and recreated
+      // these rows each refresh — visible as flicker on the node lines. The
+      // count (always cpu + mem) never changes, so the delegates persist and
+      // simply re-read their figures through `meter` when the row updates.
       Repeater {
-        model: nodeEntry.row && nodeEntry.row.meters ? nodeEntry.row.meters : []
+        model: nodeEntry.row && nodeEntry.row.meters ? nodeEntry.row.meters.length : 0
 
         Row {
-          required property var modelData
+          id: meterRowSlot
+          required property int index
+          readonly property var meter: nodeEntry.row && nodeEntry.row.meters
+            ? nodeEntry.row.meters[meterRowSlot.index] : null
+
           width: nodeInner.width
           spacing: Style.space(8)
 
           Text {
             id: meterLabel
             anchors.verticalCenter: parent.verticalCenter
-            text: String(modelData.label || "").toUpperCase()
+            text: String(meterRowSlot.meter && meterRowSlot.meter.label || "").toUpperCase()
             color: root.faint
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
@@ -1055,15 +1064,15 @@ Panel {
           Meter {
             anchors.verticalCenter: parent.verticalCenter
             width: parent.width - meterLabel.width - meterValue.width - Style.space(16)
-            mkey: String(modelData.key || "")
-            percent: Number(modelData.percent) || 0
-            level: String(modelData.level || "ok")
+            mkey: String(meterRowSlot.meter && meterRowSlot.meter.key || "")
+            percent: Number(meterRowSlot.meter && meterRowSlot.meter.percent) || 0
+            level: String(meterRowSlot.meter && meterRowSlot.meter.level || "ok")
           }
 
           Text {
             id: meterValue
             anchors.verticalCenter: parent.verticalCenter
-            text: String(modelData.text || "")
+            text: String(meterRowSlot.meter && meterRowSlot.meter.text || "")
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
