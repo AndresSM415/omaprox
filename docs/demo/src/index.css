@@ -539,7 +539,9 @@ h2 {
 .led.run {
   background: var(--run);
   /* dot, a gap of panel background, then the 0.22 halo ring */
-  box-shadow: 0 0 0 2px var(--panel-bg), 0 0 0 3px var(--run-halo);
+  box-shadow:
+    0 0 0 2px var(--panel-bg),
+    0 0 0 3px var(--run-halo);
 }
 .led.pause {
   /* held: dimmed and filled, no halo — only run and crit are lit */
@@ -547,7 +549,9 @@ h2 {
 }
 .led.crit {
   background: var(--crit);
-  box-shadow: 0 0 0 2px var(--panel-bg), 0 0 0 3px var(--crit-halo);
+  box-shadow:
+    0 0 0 2px var(--panel-bg),
+    0 0 0 3px var(--crit-halo);
 }
 .led.stop {
   background: transparent;

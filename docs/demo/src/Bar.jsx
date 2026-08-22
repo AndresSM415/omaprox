@@ -32,9 +32,22 @@ const G = {
 function Glyph({ name, size = 13 }) {
   const paths = G[name] || [];
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
       {paths.map((d, i) => (
-        <path key={i} d={d} stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          key={i}
+          d={d}
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       ))}
     </svg>
   );
@@ -71,10 +84,33 @@ export default function DemoBar() {
 
       <div className="right">
         <Widget active>
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M8 1.6 14 4.6 8 7.6 2 4.6 8 1.6Z" style={{ stroke: "var(--accent)" }} strokeWidth="1.1" strokeLinejoin="round" />
-            <path d="M2 8 8 11 14 8" style={{ stroke: "var(--accent)" }} strokeWidth="1.1" strokeLinejoin="round" opacity=".8" />
-            <path d="M2 11.4 8 14.4 14 11.4" style={{ stroke: "var(--accent)" }} strokeWidth="1.1" strokeLinejoin="round" opacity=".5" />
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 16 16"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M8 1.6 14 4.6 8 7.6 2 4.6 8 1.6Z"
+              style={{ stroke: "var(--accent)" }}
+              strokeWidth="1.1"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M2 8 8 11 14 8"
+              style={{ stroke: "var(--accent)" }}
+              strokeWidth="1.1"
+              strokeLinejoin="round"
+              opacity=".8"
+            />
+            <path
+              d="M2 11.4 8 14.4 14 11.4"
+              style={{ stroke: "var(--accent)" }}
+              strokeWidth="1.1"
+              strokeLinejoin="round"
+              opacity=".5"
+            />
           </svg>
           <span className="bar-count">8</span>
         </Widget>

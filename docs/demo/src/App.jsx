@@ -9,47 +9,146 @@ const INSTALL_CMD =
 
 function Mark({ size = 20, color = "currentColor" }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M8 1.6 14 4.6 8 7.6 2 4.6 8 1.6Z" style={{ stroke: color }} strokeWidth="1.1" strokeLinejoin="round" />
-      <path d="M2 8 8 11 14 8" style={{ stroke: color }} strokeWidth="1.1" strokeLinejoin="round" opacity=".8" />
-      <path d="M2 11.4 8 14.4 14 11.4" style={{ stroke: color }} strokeWidth="1.1" strokeLinejoin="round" opacity=".5" />
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M8 1.6 14 4.6 8 7.6 2 4.6 8 1.6Z"
+        style={{ stroke: color }}
+        strokeWidth="1.1"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M2 8 8 11 14 8"
+        style={{ stroke: color }}
+        strokeWidth="1.1"
+        strokeLinejoin="round"
+        opacity=".8"
+      />
+      <path
+        d="M2 11.4 8 14.4 14 11.4"
+        style={{ stroke: color }}
+        strokeWidth="1.1"
+        strokeLinejoin="round"
+        opacity=".5"
+      />
     </svg>
   );
 }
 
 function ContainerMark({ size = 20 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="2" y="4.2" width="12" height="8" rx="1.3" stroke="currentColor" strokeWidth="1.1" />
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <rect
+        x="2"
+        y="4.2"
+        width="12"
+        height="8"
+        rx="1.3"
+        stroke="currentColor"
+        strokeWidth="1.1"
+      />
       <path d="M2 7h12" stroke="currentColor" strokeWidth="1.1" opacity=".55" />
-      <path d="M4.4 9.6h2.2" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" opacity=".55" />
+      <path
+        d="M4.4 9.6h2.2"
+        stroke="currentColor"
+        strokeWidth="1.1"
+        strokeLinecap="round"
+        opacity=".55"
+      />
     </svg>
   );
 }
 
 function VmMark({ size = 20 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="2.4" y="2" width="11.2" height="12" rx="1.3" stroke="currentColor" strokeWidth="1.1" />
-      <path d="M4.8 4.6h6.4M4.8 7h6.4M4.8 9.4h3.4" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" opacity=".55" />
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <rect
+        x="2.4"
+        y="2"
+        width="11.2"
+        height="12"
+        rx="1.3"
+        stroke="currentColor"
+        strokeWidth="1.1"
+      />
+      <path
+        d="M4.8 4.6h6.4M4.8 7h6.4M4.8 9.4h3.4"
+        stroke="currentColor"
+        strokeWidth="1.1"
+        strokeLinecap="round"
+        opacity=".55"
+      />
     </svg>
   );
 }
 
 function TerminalGlyph() {
   return (
-    <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-      <path d="M3 4.2 5.8 7 3 9.8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M7.6 10h3.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 14 14"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M3 4.2 5.8 7 3 9.8"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M7.6 10h3.4"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
 
 function RdpGlyph() {
   return (
-    <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-      <rect x="1.6" y="2.4" width="10.8" height="7.4" rx="1.1" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M5.2 12h3.6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 14 14"
+      fill="none"
+      aria-hidden="true"
+    >
+      <rect
+        x="1.6"
+        y="2.4"
+        width="10.8"
+        height="7.4"
+        rx="1.1"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+      <path
+        d="M5.2 12h3.6"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
@@ -90,7 +189,11 @@ function GuestRow({ guest }) {
   return (
     <div className={cls}>
       <span
-        className={["tbtn", guest.console === "rdp" && "rdp", guest.state === "stop" && "off"]
+        className={[
+          "tbtn",
+          guest.console === "rdp" && "rdp",
+          guest.state === "stop" && "off",
+        ]
           .filter(Boolean)
           .join(" ")}
         title={guest.consoleHint}
@@ -98,7 +201,15 @@ function GuestRow({ guest }) {
       >
         {guest.console === "rdp" ? <RdpGlyph /> : <TerminalGlyph />}
       </span>
-      <Led state={guest.state === "stop" ? "stop" : guest.led === "crit" ? "crit" : "run"} />
+      <Led
+        state={
+          guest.state === "stop"
+            ? "stop"
+            : guest.led === "crit"
+              ? "crit"
+              : "run"
+        }
+      />
       <span className="vmid">{guest.vmid}</span>
       <span className="name">
         <b>{guest.name}</b>
@@ -169,29 +280,136 @@ function Panel({ children }) {
 /* ------------------------------------------------------------------- data */
 
 const ATTENTION = [
-  { vmid: 204, name: "truenas", detail: "io delay 18% · 12 min", trail: "pve02", led: "crit", alarm: true, console: "terminal", state: "run" },
-  { vmid: 105, name: "gitea", detail: "stopped · autostart on", trail: "pve01", led: "stop", console: "terminal", state: "stop" },
+  {
+    vmid: 204,
+    name: "truenas",
+    detail: "io delay 18% · 12 min",
+    trail: "pve02",
+    led: "crit",
+    alarm: true,
+    console: "terminal",
+    state: "run",
+  },
+  {
+    vmid: 105,
+    name: "gitea",
+    detail: "stopped · autostart on",
+    trail: "pve01",
+    led: "stop",
+    console: "terminal",
+    state: "stop",
+  },
 ];
 
 const NODES = [
-  { name: "pve01", cores: 12, uptime: "41d", cpu: 22, mem: 38, memText: "24.6/64G" },
-  { name: "pve02", cores: 8, uptime: "41d", cpu: 41, mem: 87, memText: "27.9/32G" },
+  {
+    name: "pve01",
+    cores: 12,
+    uptime: "41d",
+    cpu: 22,
+    mem: 38,
+    memText: "24.6/64G",
+  },
+  {
+    name: "pve02",
+    cores: 8,
+    uptime: "41d",
+    cpu: 41,
+    mem: 87,
+    memText: "27.9/32G",
+  },
 ];
 
 const CONTAINERS = [
-  { vmid: 101, name: "nginx-proxy", detail: "debian 12 · 12d", trail: "4.2% · 412M", cursor: true, console: "terminal", state: "run", consoleHint: "pct enter 101" },
-  { vmid: 102, name: "pihole", detail: "debian 12 · 41d", trail: "1.1% · 196M", console: "terminal", state: "run" },
-  { vmid: 103, name: "jellyfin", detail: "ubuntu 24.04 · 8d", trail: "38% · 2.1G", console: "terminal", state: "run" },
-  { vmid: 104, name: "postgres", detail: "debian 12 · 41d", trail: "6.8% · 1.4G", console: "terminal", state: "run" },
-  { vmid: 105, name: "gitea", detail: "stopped", trail: "—", console: "terminal", state: "stop" },
-  { vmid: 110, name: "wireguard", detail: "alpine 3.20 · 41d", trail: "0.2% · 64M", console: "terminal", state: "run" },
+  {
+    vmid: 101,
+    name: "nginx-proxy",
+    detail: "debian 12 · 12d",
+    trail: "4.2% · 412M",
+    cursor: true,
+    console: "terminal",
+    state: "run",
+    consoleHint: "pct enter 101",
+  },
+  {
+    vmid: 102,
+    name: "pihole",
+    detail: "debian 12 · 41d",
+    trail: "1.1% · 196M",
+    console: "terminal",
+    state: "run",
+  },
+  {
+    vmid: 103,
+    name: "jellyfin",
+    detail: "ubuntu 24.04 · 8d",
+    trail: "38% · 2.1G",
+    console: "terminal",
+    state: "run",
+  },
+  {
+    vmid: 104,
+    name: "postgres",
+    detail: "debian 12 · 41d",
+    trail: "6.8% · 1.4G",
+    console: "terminal",
+    state: "run",
+  },
+  {
+    vmid: 105,
+    name: "gitea",
+    detail: "stopped",
+    trail: "—",
+    console: "terminal",
+    state: "stop",
+  },
+  {
+    vmid: 110,
+    name: "wireguard",
+    detail: "alpine 3.20 · 41d",
+    trail: "0.2% · 64M",
+    console: "terminal",
+    state: "run",
+  },
 ];
 
 const VMS = [
-  { vmid: 202, name: "win-srv-2022", detail: "windows · rdp :3389", trail: "11.8% · 6.1G", hovered: true, console: "rdp", state: "run", consoleHint: "xfreerdp3 /v:10.0.20.42" },
-  { vmid: 203, name: "home-assistant", detail: "haos 13 · agent ok", trail: "9.4% · 2.8G", console: "terminal", state: "run" },
-  { vmid: 204, name: "truenas", detail: "io delay 18%", trail: "5.1% · 12.0G", led: "crit", alarm: true, console: "terminal", state: "run" },
-  { vmid: 205, name: "win11-lab", detail: "stopped", trail: "—", console: "rdp", state: "stop" },
+  {
+    vmid: 202,
+    name: "win-srv-2022",
+    detail: "windows · rdp :3389",
+    trail: "11.8% · 6.1G",
+    hovered: true,
+    console: "rdp",
+    state: "run",
+    consoleHint: "xfreerdp3 /v:10.0.20.42",
+  },
+  {
+    vmid: 203,
+    name: "home-assistant",
+    detail: "haos 13 · agent ok",
+    trail: "9.4% · 2.8G",
+    console: "terminal",
+    state: "run",
+  },
+  {
+    vmid: 204,
+    name: "truenas",
+    detail: "io delay 18%",
+    trail: "5.1% · 12.0G",
+    led: "crit",
+    alarm: true,
+    console: "terminal",
+    state: "run",
+  },
+  {
+    vmid: 205,
+    name: "win11-lab",
+    detail: "stopped",
+    trail: "—",
+    console: "rdp",
+    state: "stop",
+  },
 ];
 
 /* ---------------------------------------------------------------- panels */
@@ -234,7 +452,8 @@ function OverviewPanel() {
         ))}
       </div>
       <div className="legend">
-        j/k move &nbsp; ⏎ stats &nbsp; t console &nbsp; / search &nbsp; r refresh
+        j/k move &nbsp; ⏎ stats &nbsp; t console &nbsp; / search &nbsp; r
+        refresh
       </div>
     </Panel>
   );
@@ -255,7 +474,12 @@ function ContainerPanel() {
         <Stat label="CPU" value="4.2%" pct={4.2} sub="2 cores · load 0.08" />
         <Stat label="Memory" value="40%" pct={40} sub="412 MB / 1.0 GB" />
         <Stat label="Swap" value="0%" pct={1} sub="0 B / 512 MB" />
-        <Stat label="Rootfs" value="39%" pct={39} sub="3.1 GB / 8.0 GB · local-lvm" />
+        <Stat
+          label="Rootfs"
+          value="39%"
+          pct={39}
+          sub="3.1 GB / 8.0 GB · local-lvm"
+        />
       </div>
       <div className="rule" />
       <SectionHead>Traffic · since boot</SectionHead>
@@ -274,9 +498,9 @@ function ContainerPanel() {
         <Kv k="Backup" v="ok · 6h ago · pbs01" tone="ok" />
       </div>
       <div className="legend">
-        t opens <span style={{ color: "var(--fg)" }}>pct enter 101</span> in a floating terminal
-        <br />
-        h back &nbsp; ⏎ web UI &nbsp; c copy vmid &nbsp; r refresh
+        t opens <span style={{ color: "var(--fg)" }}>pct enter 101</span> in a
+        floating terminal
+        <br />h back &nbsp; ⏎ web UI &nbsp; c copy vmid &nbsp; r refresh
       </div>
     </Panel>
   );
@@ -294,10 +518,31 @@ function VmPanel() {
       />
       <SectionHead>Resources</SectionHead>
       <div className="rows">
-        <Stat label="CPU" value="11.8%" pct={11.8} sub="4 vcpu · host · 1 socket" />
-        <Stat label="Memory" value="76%" pct={76} tone="warn" sub="6.1 GB / 8.0 GB · balloon on" />
-        <Stat label="scsi0" value="62%" pct={62} sub="74 GB / 120 GB · local-zfs" />
-        <Stat label="Host share" value="4%" pct={4} sub="0.47 of 12 cores on pve01" />
+        <Stat
+          label="CPU"
+          value="11.8%"
+          pct={11.8}
+          sub="4 vcpu · host · 1 socket"
+        />
+        <Stat
+          label="Memory"
+          value="76%"
+          pct={76}
+          tone="warn"
+          sub="6.1 GB / 8.0 GB · balloon on"
+        />
+        <Stat
+          label="scsi0"
+          value="62%"
+          pct={62}
+          sub="74 GB / 120 GB · local-zfs"
+        />
+        <Stat
+          label="Host share"
+          value="4%"
+          pct={4}
+          sub="0.47 of 12 cores on pve01"
+        />
       </div>
       <div className="rule" />
       <SectionHead>Traffic · since boot</SectionHead>
@@ -317,9 +562,9 @@ function VmPanel() {
         <Kv k="Backup" v="ok · 6h ago · pbs01" tone="ok" />
       </div>
       <div className="legend">
-        t opens <span style={{ color: "var(--fg)" }}>xfreerdp3 /v:10.0.20.42</span>
-        <br />
-        h back &nbsp; ⏎ web UI &nbsp; c copy address &nbsp; r refresh
+        t opens{" "}
+        <span style={{ color: "var(--fg)" }}>xfreerdp3 /v:10.0.20.42</span>
+        <br />h back &nbsp; ⏎ web UI &nbsp; c copy address &nbsp; r refresh
       </div>
     </Panel>
   );
@@ -344,18 +589,18 @@ function ThemedStage({ t }) {
           </div>
           <div className="win-body">
             <div>
-              <span className="d">dr@omarchy</span> ~ <span className="p">❯</span> ssh -t
-              root@pve01 pct enter 101
+              <span className="d">dr@omarchy</span> ~{" "}
+              <span className="p">❯</span> ssh -t root@pve01 pct enter 101
             </div>
             <div>&nbsp;</div>
             <div>
-              <span className="c">root@nginx-proxy</span>:<span className="d">~</span>#
-              systemctl is-active nginx
+              <span className="c">root@nginx-proxy</span>:
+              <span className="d">~</span># systemctl is-active nginx
             </div>
             <div className="p">active</div>
             <div>
-              <span className="c">root@nginx-proxy</span>:<span className="d">~</span>#{" "}
-              <span className="caret" />
+              <span className="c">root@nginx-proxy</span>:
+              <span className="d">~</span># <span className="caret" />
             </div>
           </div>
         </div>
@@ -369,7 +614,9 @@ function ThemedStage({ t }) {
             <div className="rdp-note">
               remote session
               <br />
-              <span style={{ opacity: 0.7 }}>10.0.20.42:3389 · /dynamic-resolution /clipboard</span>
+              <span style={{ opacity: 0.7 }}>
+                10.0.20.42:3389 · /dynamic-resolution /clipboard
+              </span>
             </div>
             <div className="rdp-task">
               <span style={{ color: "var(--rdp)" }}>⊞</span>
@@ -413,7 +660,15 @@ function InstallBlock() {
 // over the foreground. Repeating that here keeps the demo honest.
 function hexToRgb(hex) {
   const h = String(hex).replace("#", "");
-  const n = parseInt(h.length === 3 ? h.split("").map((c) => c + c).join("") : h, 16);
+  const n = parseInt(
+    h.length === 3
+      ? h
+          .split("")
+          .map((c) => c + c)
+          .join("")
+      : h,
+    16,
+  );
   return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
 
@@ -512,7 +767,8 @@ function ThemeCarousel() {
   };
   const onPointerMove = (e) => {
     if (!drag.current || !drag.current.active) return;
-    trackRef.current.scrollLeft = drag.current.scroll - (e.clientX - drag.current.x);
+    trackRef.current.scrollLeft =
+      drag.current.scroll - (e.clientX - drag.current.x);
   };
   const onPointerUp = () => {
     if (drag.current) drag.current.active = false;
@@ -528,7 +784,8 @@ function ThemeCarousel() {
           →
         </button>
         <span className="carousel-theme">
-          {THEMES[index].name} <span className="muted">{THEMES[index].mode}</span>
+          {THEMES[index].name}{" "}
+          <span className="muted">{THEMES[index].mode}</span>
         </span>
         <span className="carousel-count">
           {index + 1} / {THEMES.length}
@@ -564,7 +821,10 @@ function ThemeCarousel() {
 
 export default function App() {
   const [theme, setTheme] = useState(() => {
-    if (typeof document !== "undefined" && document.documentElement.dataset.theme)
+    if (
+      typeof document !== "undefined" &&
+      document.documentElement.dataset.theme
+    )
       return document.documentElement.dataset.theme;
     return "auto";
   });
@@ -586,10 +846,17 @@ export default function App() {
             Omarchy <b>4 · Quattro</b> — Quickshell bar plugin
           </div>
           <div className="masthead-actions">
-            <a className="repo-link" href="https://github.com/AndresSM415/omaprox">
+            <a
+              className="repo-link"
+              href="https://github.com/AndresSM415/omaprox"
+            >
               github ↗
             </a>
-            <button className="theme-btn" onClick={cycle} aria-label="Toggle theme">
+            <button
+              className="theme-btn"
+              onClick={cycle}
+              aria-label="Toggle theme"
+            >
               {theme === "auto" ? "theme: auto" : `theme: ${theme}`}
             </button>
           </div>
@@ -599,10 +866,10 @@ export default function App() {
         </h1>
         <p className="lede">
           Every container and VM on your Proxmox cluster, in your Omarchy bar.{" "}
-          <em>What is running, what died, and how hard it is working</em> — at a glance,
-          with the full numbers one keypress away and a shell or a remote desktop on any
-          guest without leaving the keyboard. It only ever reads: nothing here can start,
-          stop or reconfigure a thing.
+          <em>What is running, what died, and how hard it is working</em> — at a
+          glance, with the full numbers one keypress away and a shell or a
+          remote desktop on any guest without leaving the keyboard. It only ever
+          reads: nothing here can start, stop or reconfigure a thing.
         </p>
         <div className="facts">
           <span className="fact hot">read-only</span>
@@ -628,28 +895,32 @@ export default function App() {
               running, stopped, held or in trouble.
             </li>
             <li>
-              <b>Press one for its numbers.</b> CPU, memory, swap, disk, network and
-              disk I/O, plus uptime, OS, address and autostart.
+              <b>Press one for its numbers.</b> CPU, memory, swap, disk, network
+              and disk I/O, plus uptime, OS, address and autostart.
             </li>
             <li>
-              <b>Press <code>t</code> for a console.</b> <code>pct enter</code> for a
-              container, SSH for a Linux VM, <code>xfreerdp3</code> for Windows — asked
-              for once, then remembered.
+              <b>
+                Press <code>t</code> for a console.
+              </b>{" "}
+              <code>pct enter</code> for a container, SSH for a Linux VM,{" "}
+              <code>xfreerdp3</code> for Windows — asked for once, then
+              remembered.
             </li>
           </ul>
           <ul className="notes">
             <li>
-              <b>Never leave the keyboard.</b> <code>j/k</code> move, Enter descends,{" "}
-              <code>h</code> comes back, <code>/</code> searches by name, vmid, node or
-              OS, <code>o</code> opens the Proxmox web UI.
+              <b>Never leave the keyboard.</b> <code>j/k</code> move, Enter
+              descends, <code>h</code> comes back, <code>/</code> searches by
+              name, vmid, node or OS, <code>o</code> opens the Proxmox web UI.
             </li>
             <li>
-              <b>It looks like your desktop.</b> Every colour comes from your Omarchy
-              theme — status included, which is why it still reads on a monochrome one.
+              <b>It looks like your desktop.</b> Every colour comes from your
+              Omarchy theme — status included, which is why it still reads on a
+              monochrome one.
             </li>
             <li>
-              <b>Quiet when nothing is wrong.</b> The alert section only exists when
-              something needs you, so its presence is the signal.
+              <b>Quiet when nothing is wrong.</b> The alert section only exists
+              when something needs you, so its presence is the signal.
             </li>
           </ul>
         </div>
@@ -663,22 +934,24 @@ export default function App() {
         <div className="grid2">
           <ul className="notes">
             <li>
-              <b>Read-only by construction.</b> Every call is a GET, and the API token
-              only needs the stock <code>PVEAuditor</code> role. A token that cannot
-              stop a VM cannot stop one by accident.
+              <b>Read-only by construction.</b> Every call is a GET, and the API
+              token only needs the stock <code>PVEAuditor</code> role. A token
+              that cannot stop a VM cannot stop one by accident.
             </li>
             <li>
-              <b>No secrets in your config.</b> The token lives in its own file, RDP
-              credentials in your login keyring, and SSH consoles offer a one-time key
-              install instead of storing a password.
+              <b>No secrets in your config.</b> The token lives in its own file,
+              RDP credentials in your login keyring, and SSH consoles offer a
+              one-time key install instead of storing a password.
             </li>
           </ul>
           <ul className="notes">
             <li>
-              <b>One request per poll,</b> and none at all while the panel is closed.
+              <b>One request per poll,</b> and none at all while the panel is
+              closed.
             </li>
             <li>
-              <b>Needs:</b> Proxmox VE, a read-only API token, about two minutes.{" "}
+              <b>Needs:</b> Proxmox VE, a read-only API token, about two
+              minutes.{" "}
               <a href="https://github.com/AndresSM415/omaprox#setup">Setup →</a>
             </li>
           </ul>
@@ -687,9 +960,13 @@ export default function App() {
 
       <footer>
         <span>omaprox — read-only Proxmox VE for the Omarchy bar</span>
-        <a href="https://github.com/AndresSM415/omaprox">github.com/AndresSM415/omaprox</a>
+        <a href="https://github.com/AndresSM415/omaprox">
+          github.com/AndresSM415/omaprox
+        </a>
         <span>MIT · not affiliated with Proxmox Server Solutions GmbH</span>
-        <span style={{ marginLeft: "auto" }}>figures shown are a sample cluster</span>
+        <span style={{ marginLeft: "auto" }}>
+          figures shown are a sample cluster
+        </span>
       </footer>
     </div>
   );
