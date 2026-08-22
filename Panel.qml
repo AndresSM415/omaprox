@@ -51,6 +51,14 @@ Panel {
   // that makes a drill-down feel like a maze.
   property int overviewCursor: 0
 
+  // Last drawn level per meter key. Node rows render their meters through a
+  // Repeater over `row.meters`, and that array is rebuilt on every poll, so
+  // those delegates are destroyed and recreated rather than updated in place.
+  // A fresh meter reads this map to start where its predecessor stopped
+  // instead of snapping or sweeping; guest-view meters persist across polls
+  // and simply glide, but record here all the same.
+  property var meterValues: ({})
+
   readonly property bool inGuest: pve.selectedKey !== "" && filter === ""
   readonly property bool inNode: pve.selectedNode !== null && filter === ""
 
@@ -793,13 +801,23 @@ Panel {
 
   // A thin meter. Shared by node rows and the guest view so a bar means the
   // same thing wherever it appears.
-  // Rows persist across polls now, so a meter is one item whose width simply
-  // changes — which means gliding between values costs nothing and flickers
-  // nowhere. Off snaps straight to each new figure, the way it drew before.
+  // With smoothMeters on, a bar glides between figures. Meters whose
+  // delegates survive a poll (the guest view) glide through the Behavior;
+  // meters rebuilt every poll (node rows) seed from meterValues so the new
+  // delegate resumes from where the old one was drawn and glides from there.
+  // Off draws straight at each new value, no animation in either place.
   component Meter: Item {
     id: meter
+
     property real percent: 0
     property string level: "ok"
+    // Stable identity across polls — without it there is nothing to remember.
+    property string mkey: ""
+
+    readonly property real target: Util.clamp(Number(percent) || 0, 0, 1)
+    property real fill: 0
+    property bool seeded: false
+    property string seededKey: ""
 
     implicitHeight: Math.max(Style.space(4), Math.round(Style.spacing.controlHeight * 0.14))
 
@@ -815,17 +833,45 @@ Panel {
       anchors.verticalCenter: meterTrack.verticalCenter
       height: meterTrack.height
       radius: meterTrack.radius
-      width: meterTrack.width * Util.clamp(Number(meter.percent) || 0, 0, 1)
+      width: meterTrack.width * meter.fill
+      objectName: "omaprox-meter-fill"
       // Warn is the same colour at reduced strength rather than a second hue,
       // so a filling meter reads as "on the way there" instead of as a
       // different kind of problem.
       color: meter.level === "crit" ? root.urgent
         : (meter.level === "warn" ? Util.alpha(root.urgent, 0.75) : root.foreground)
-      Behavior on width {
-        enabled: pve.smoothMeters
-        NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
-      }
     }
+
+    // Only animates once the bar has been seeded, so the jump to the
+    // remembered level on creation is instant and invisible.
+    Behavior on fill {
+      enabled: pve.smoothMeters && meter.seeded
+      NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+    }
+    function reseed() {
+      if (meter.mkey === "" || meter.mkey === meter.seededKey) return
+      meter.seededKey = meter.mkey
+      var remembered = root.meterValues[meter.mkey]
+      var start = remembered !== undefined ? remembered : meter.target
+      meter.seeded = false
+      meter.fill = start
+      meter.seeded = true
+      meter.fill = meter.target
+    }
+
+    // The guest-view meters sit behind a Loader whose `item.row` lands one
+    // beat after construction, so percent/mkey read placeholders first; defer
+    // until the cascade settles or the seed locks fill at zero.
+    onMkeyChanged: Qt.callLater(reseed)
+    Component.onCompleted: Qt.callLater(reseed)
+
+    // Ordinary updates once seeded to this key: glide. Guarded so a target
+    // arriving before the deferred seed cannot jump ahead of it.
+    onTargetChanged: if (meter.seeded && meter.mkey === meter.seededKey) meter.fill = meter.target
+
+    // Recorded continuously rather than only at rest, so a delegate torn down
+    // mid-glide is replaced by one resuming from the same place.
+    onFillChanged: if (meter.mkey !== "") root.meterValues[meter.mkey] = meter.fill
   }
 
   // A guest: console button, LED, vmid, name over a status line, and the
@@ -1009,6 +1055,7 @@ Panel {
           Meter {
             anchors.verticalCenter: parent.verticalCenter
             width: parent.width - meterLabel.width - meterValue.width - Style.space(16)
+            mkey: String(modelData.key || "")
             percent: Number(modelData.percent) || 0
             level: String(modelData.level || "ok")
           }
@@ -1073,6 +1120,7 @@ Panel {
 
       Meter {
         width: parent.width
+        mkey: meterEntry.row ? String(meterEntry.row.key || "") : ""
         percent: meterEntry.row ? Number(meterEntry.row.percent) || 0 : 0
         level: meterEntry.row ? String(meterEntry.row.level || "ok") : "ok"
       }
