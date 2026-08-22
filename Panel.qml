@@ -380,8 +380,6 @@ Panel {
   // only ever useful inside Proxmox, where you already are.
   function togglePin() {
     pinned = !pinned
-    pve.flashStatus(pinned ? "Pinned — click outside all you like"
-      : "Unpinned — click outside to dismiss")
   }
 
   function copyCurrent() {
@@ -594,7 +592,8 @@ Panel {
 
           PanelHero {
             id: hero
-            width: parent.width
+            // Narrowed so its trailing label ("2 ALERTS") ends clear of the pin.
+            width: parent.width - pinButton.width - Style.space(14)
             title: root.heroTitle
           meta: root.heroMeta
           detail: root.heroDetail
