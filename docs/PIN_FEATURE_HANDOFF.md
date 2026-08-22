@@ -16,9 +16,13 @@ other apps normally (especially typing).
 - **Done.** Pinned, the panel stays up; clicking another window focuses it and
   gives it the keyboard; clicking back on the card returns the keyboard to the
   panel and `j`/`k` work again.
-- **Open:** on a multi-monitor setup, clicks on the *other* monitor are still
-  swallowed while pinned. See "Remaining issue" below. Single-monitor setups
-  are unaffected.
+- **Open:** on a multi-monitor setup, clicks on whichever monitor the panel is
+  *not* on are still swallowed while pinned. See "Remaining issue" below.
+  Single-monitor setups are unaffected.
+
+  This is not laptop-versus-external. The bar runs on every output, so the
+  panel opens on whichever bar you clicked, and that output is the one that
+  works — verified in both directions on the same session.
 
 ## What the problem actually was
 
@@ -104,8 +108,11 @@ Variants {
 ```
 
 While pinned, that `close()` is correctly a no-op — but the click is still
-swallowed, so a window on the second monitor does not focus. Verified: clicking
-a toplevel on DP-1 while pinned left the active window unchanged.
+swallowed, so a window on the other output does not focus. Verified both ways
+on a two-monitor session: with the panel opened from the eDP-1 bar, clicks on
+DP-1 were swallowed; opened from the DP-1 bar, the twin moved to eDP-1 and the
+swallowing moved with it. The failing output is always the one the panel is not
+on.
 
 The twins are created inside the component with no `id` or alias reachable from
 the plugin, and they are gated only on `root.open`, which cannot be false while
@@ -113,10 +120,21 @@ the card is visible. So this is **not fixable from the plugin**; it needs a
 change in `/usr/share/omarchy/shell/Ui/KeyboardPanel.qml`, which is
 package-owned and must not be edited locally.
 
-Suggested upstream shape: have the twins honour the same input region the main
-surface uses, or expose a `dismissable` property that gates both `dismissArea`
-and the `Variants` model, so an owner that overrides `close()` to a no-op can
-also say so. Worth filing against omarchy rather than working around.
+Suggested upstream shape: expose a `dismissable` property (default true) that
+gates both `dismissArea.enabled` and the `Variants` model, so an owner that has
+overridden `close()` into a no-op can say so and stop paying for dismissal it
+does not use. Worth filing against omarchy rather than working around.
+
+Rejected workarounds, so they are not retried:
+
+- Overriding `screen: null` on the instance does remove every twin, since the
+  delegate tests `!!root.screen` — but `screen` also decides which output the
+  panel itself maps to and feeds `screenW`/`screenH`, so the card jumps to the
+  primary output the moment you pin it.
+- A plugin-owned surface stacked above the twin cannot help either way: an
+  empty input region lets the click fall through to the twin, and a non-empty
+  one swallows it just the same. A Wayland surface cannot forward a click to
+  the toplevel underneath it.
 
 ## Architecture facts (still accurate, keep)
 

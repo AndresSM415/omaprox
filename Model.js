@@ -99,7 +99,7 @@ function glyphFor(kind) {
   case "windows":  return ""  // windows
   case "linux":    return ""  // linux
   case "lock":     return ""  // lock
-  case "pin":      return ""  // pin
+  case "pin":      return ""  // thumb tack
   }
   return ""                   // cubes
 }
