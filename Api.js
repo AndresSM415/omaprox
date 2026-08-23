@@ -185,6 +185,10 @@ function guestWebUrl(host, guest, custom) {
 function normalizeWebUrl(value) {
   var url = String(value || "").trim();
   if (url === "") return "";
+  // What the console prompt writes when you decline. The line has to exist so
+  // the question is not asked again on the next console, but it is not a page:
+  // without this it would normalise to the hostname "-".
+  if (url === "-") return "";
   if (/^https?:\/\//i.test(url)) return url;
   // `nas.lan:5000` is a host and a port, not a scheme. The two are the same
   // grammar right up to the colon — dots and all — so what follows it is what

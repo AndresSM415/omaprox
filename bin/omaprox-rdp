@@ -315,7 +315,7 @@ ask() {
     reply=${reply// /}
     if [[ $reply == "-" ]]; then
       WEBPAGE=""
-      store_webpage ""
+      store_webpage "-"
     elif [[ -n $reply ]]; then
       WEBPAGE=$reply
       store_webpage "$WEBPAGE"
@@ -368,6 +368,9 @@ USERNAME=$(attribute username) || USERNAME=""
 DOMAIN=$(attribute domain) || DOMAIN=""
 PASSWORD=""
 WEBPAGE=$(lookup_webpage) || WEBPAGE=""
+# "-" is the stored marker for "asked, declined" that keeps bin/omaprox-ssh
+# from asking again; as a prefill it is not an answer, it is the absence of one.
+[[ $WEBPAGE == "-" ]] && WEBPAGE=""
 
 for attempt in 1 2 3; do
   ask "$USERNAME" "$DOMAIN"

@@ -209,9 +209,9 @@ Item {
         ? !!resolvedAddresses[String(selectedGuest.vmid)] : false,
       webUrl: guestWebUrl(selectedGuest),
       webCustom: hasCustomWebPage(selectedGuest),
-      // Only a QEMU guest has console state of its own to drop; see
-      // forgetCredentials.
-      canForget: !!(selectedGuest && selectedGuest.type === "qemu"),
+      // Every guest has something to drop now that containers are asked for a
+      // web page too; only the VM path adds an address and a password to it.
+      canForget: !!selectedGuest,
       thresholds: { memWarn: memWarn, memClear: memClear },
       alarmMemo: alarmMemo,
       showTemplates: showTemplates,
@@ -645,7 +645,13 @@ Item {
         // be reachable — which matters because a node name like `pve` usually
         // resolves to nothing at all.
         var lxcHost = nodes.length > 1 ? guest.node : Api.hostAuthority(host)
+        // --vmid/--guess carry the container's own identity even though the
+        // connection targets its node: the helper needs them to ask for, and
+        // file, a web page against the container rather than against the node
+        // every container on it shares.
         lxcCommand = Util.shellQuote(helperPath("omaprox-ssh"))
+          + " --vmid " + Util.shellQuote(String(guest.vmid))
+          + " --guess " + Util.shellQuote(guest.name)
           + " " + Util.shellQuote(nodeSshUser)
           + " " + Util.shellQuote(lxcHost)
           + " pct enter " + Util.shellQuote(String(guest.vmid))
@@ -713,16 +719,19 @@ Item {
   // its node, never the guest itself, so there is no per-guest address or
   // credential riding on it.
   function forgetCredentials(guest) {
-    // Silent on a container rather than explaining itself: F is not offered
-    // for one anywhere in the UI, so a message here would be answering a
-    // question nobody was invited to ask.
-    if (!guest || guest.type !== "qemu") return
+    if (!guest) return
     if (forgetReq.running) return
     var key = Model.guestKey(guest)
     var config = configs[key] || null
     var address = Api.resolveAddress(guest, config, agentAddresses[key] || "",
       addressOverrides, resolvedAddresses).address
-    forgetReq.command = [helperPath("omaprox-forget"), String(guest.vmid), address]
+    // The address is only handed over for a VM. It is what the keyring entry
+    // is filed under, and a container has no saved password to clear — passing
+    // its address anyway would aim `secret-tool clear` at whatever else on the
+    // network happens to answer to the same name.
+    forgetReq.command = guest.type === "qemu"
+      ? [helperPath("omaprox-forget"), String(guest.vmid), address]
+      : [helperPath("omaprox-forget"), String(guest.vmid)]
     forgetReq.running = true
   }
 

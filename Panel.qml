@@ -139,11 +139,10 @@ Panel {
     return n
   }
 
-  // Whether F means anything for whatever the cursor is on. Only a QEMU guest
-  // has console state of its own to drop: a container's console targets its
-  // node with `pct enter` and never stores an address, a password or a web
-  // page against the container itself.
-  readonly property bool canReset: !!(actionGuest && actionGuest.type === "qemu")
+  // Whether F means anything for whatever the cursor is on. Every guest is
+  // asked for a web page at its first console, so every guest has something to
+  // reset; a VM adds its address and its saved password to that.
+  readonly property bool canReset: !!actionGuest
 
   // The guest the console and web-UI actions apply to: whichever one the
   // cursor is on in a list, or the open one in the detail view.

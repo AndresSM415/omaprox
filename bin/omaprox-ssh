@@ -62,6 +62,14 @@ store_address() {
 # bin/omaprox-rdp, which asks the same question and writes the same store.
 WEBPAGES_FILE=${XDG_CONFIG_HOME:-$HOME/.config}/omaprox/webpages
 
+lookup_webpage() {
+  [[ -n $VMID && -f $WEBPAGES_FILE ]] || return 1
+  local v
+  v=$(sed -n "s/^[[:space:]]*${VMID}[[:space:]]*=[[:space:]]*//p" "$WEBPAGES_FILE" | tail -1)
+  [[ -n $v ]] || return 1
+  printf '%s' "$v"
+}
+
 store_webpage() {
   [[ -n $VMID ]] || return 0
   mkdir -p "$(dirname "$WEBPAGES_FILE")"
@@ -87,16 +95,30 @@ if [[ -z $HOST && -n $VMID ]]; then
     fi
     echo
     store_address "$HOST"
-
-    # Asked only here, inside the block that was already going to interrupt
-    # you. A guest whose address is known connects in silence, and adding a
-    # question to that path would trade the feature's whole point — one prompt,
-    # once — for a second one on every console.
-    read -rp "  Web page for this guest (blank for the Proxmox page): " webpage
-    webpage=${webpage// /}
-    [[ -n $webpage ]] && store_webpage "$webpage"
     echo
   fi
+fi
+
+# Asked once per guest, the first time a console opens for it, and never again
+# — a stored answer (including a deliberately empty one) skips this entirely.
+#
+# Outside the address block on purpose. A container's console is `pct enter` on
+# its node, so its host is the node's and is always known; gated on the address
+# being missing, this question could never reach one, and a container running a
+# service is the guest most likely to have a page worth pinning.
+if [[ -n $VMID ]] && ! lookup_webpage >/dev/null; then
+  echo
+  read -rp "  Web page for ${GUESS:-this guest} (blank for the Proxmox page): " webpage
+  webpage=${webpage// /}
+  # Recorded either way. Blank means "no page, stop asking"; the store keeps a
+  # marker line so the question does not come back on every console, and F
+  # clears it along with everything else when you want to be asked again.
+  if [[ -n $webpage ]]; then
+    store_webpage "$webpage"
+  else
+    store_webpage "-"
+  fi
+  echo
 fi
 
 if [[ -z $HOST ]]; then

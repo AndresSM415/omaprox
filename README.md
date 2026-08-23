@@ -155,8 +155,10 @@ panel.
 
 **Got the wrong address, or need to redo credentials?** Open the guest and
 press `F`, or click **Reset** under SESSION. That drops everything the console
-prompt remembered about the guest — the address, the saved password, and the
-web page — and the next console attempt asks for all three again, fresh.
+prompt remembered about the guest and asks again on the next console. For a VM
+that is the address, the saved password and the web page; for a container it is
+the web page alone, since its console is `pct enter` on its node and it has
+neither an address nor a password of its own here.
 
 It is all or nothing on purpose: the prompt asks those questions together, so
 a reset that cleared only some of them would leave you answering a form already
@@ -189,11 +191,11 @@ whether this guest has a page of its own; answer it and the button goes
 there instead. The row's button brightens to say so, and the guest view
 names the destination under SESSION.
 
-Answer `-` at that prompt to clear it and go back to the Proxmox page. A
-bare `nas.lan:5000` is fine — the scheme is filled in. Linux guests are
-asked the same question, but only at the one moment they already prompt
-(the first connection, when the address is unknown), so a console that
-works today never grows a new question.
+Every guest is asked once, at its first console, and never again — including
+containers, which are the ones most likely to be running something with a web
+UI. Answer `-` (or leave it blank) to say there is no page; that is remembered
+too, so the question does not come back. A bare `nas.lan:5000` is fine, the
+scheme is filled in.
 
 Console dependencies: `openssh` for nodes, containers and Linux VMs,
 `xfreerdp3` and `secret-tool` for Windows VMs.

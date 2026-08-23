@@ -630,33 +630,32 @@ function buildGuestView(state) {
   // are.
   var actions = []
 
-  // Only a VM is ever asked for a web page. A container's console is `pct
-  // enter` on its node, which needs no address and so never reaches the prompt
-  // that would ask — telling a container "set one at the prompt" points at a
-  // prompt it does not have.
-  var canSetWebPage = guest.type === "qemu"
-
   actions.push({
     kind: "kv", key: key + "/web", title: "Web page",
     value: state.webCustom
       ? String(state.webUrl)
       // Wording sized to the row: the value column elides past roughly forty
       // characters, and a hint that gets cut in half is not a hint.
-      : (canSetWebPage ? "Proxmox page  ·  set one at the prompt" : "Proxmox page for this guest"),
+      : "Proxmox page  ·  set one at the prompt",
     tone: state.webCustom ? "normal" : "dim",
     glyph: glyphFor("web"), action: "web", selectable: true
   })
 
-  // Only where there is something to drop. A container's console targets its
-  // node and holds no address or credential of its own, and an SSH guest keeps
-  // no password anywhere — omaprox-ssh installs a key instead, and a key is
-  // revoked on the server that trusts it, not from a panel on this one.
+  // Named for what it actually drops on this guest. A container's console is
+  // `pct enter` on its node, so it has no address of its own and no password
+  // here — only the web page it was asked for. Listing an address and a
+  // password for one would promise a reset of things it never had.
+  //
+  // An SSH key is not in either list: it is authorization granted on the guest,
+  // not a secret held here, and it is revoked in that account's
+  // ~/.ssh/authorized_keys rather than from a panel on this machine.
   if (state.canForget) {
     actions.push({
       // Short titles only: the column is 74px and elides anything longer,
       // which reads as a truncation bug rather than a label.
       kind: "kv", key: key + "/forget", title: "Reset",
-      value: "address, password and web page  ·  F",
+      value: (guest.type === "qemu" ? "address, password and web page" : "web page")
+        + "  ·  F",
       tone: "dim", glyph: glyphFor("reset"), action: "forget", selectable: true
     })
   }
