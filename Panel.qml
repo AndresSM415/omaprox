@@ -81,6 +81,15 @@ Panel {
   readonly property bool inGuest: pve.selectedKey !== "" && filter === ""
   readonly property bool inNode: pve.selectedNode !== null && filter === ""
 
+  // A detail view is a readout, so it has no cursor. Its rows are meters and
+  // facts; the only two that do anything — the web page and the reset under
+  // SESSION — are on `o` and `F`, and are clickable. Moving a highlight over
+  // rows that cannot be activated just invites you to press Enter on a number.
+  //
+  // The list views keep theirs: there, the cursor picks which guest every
+  // action applies to.
+  readonly property bool cursorMeaningful: !inGuest && !inNode
+
 
   readonly property var rows: {
     if (!pve.credentialsLoaded) return []
@@ -323,7 +332,7 @@ Panel {
     filtering = false
     filterField.text = ""
     cursorIndex = 0
-    cursorActive = true
+    cursorActive = root.cursorMeaningful
     keyCatcher.forceActiveFocus()
   }
 
@@ -346,6 +355,11 @@ Panel {
   }
 
   function setCursor(index) {
+    // Hover reaches here from every row. In a readout that would put the
+    // highlight back the moment the pointer crossed a meter, undoing the point
+    // of not having one — the action rows under SESSION carry their own
+    // permanent affordance and do not need it.
+    if (!cursorMeaningful) return
     cursorActive = true
     cursorIndex = index
     clampCursor()
@@ -617,6 +631,7 @@ Panel {
       blocked: root.filtering
 
       onMoveRequested: function(dx, dy) {
+        if (!root.cursorMeaningful) return
         if (!root.cursorActive) { root.cursorActive = true; return }
         root.moveCursor(dx, dy)
       }
@@ -754,9 +769,11 @@ Panel {
           // "web" rather than "web ui": with a page pinned to the guest this
           // key stops going to Proxmox, and a legend still promising the
           // Proxmox UI would be describing the behaviour it replaced.
-          if (root.inNode) return "j/k move   h back   t console   o web   c copy   r refresh"
+          // No "j/k move" in a detail view: it does nothing there now, and a
+          // legend is a promise about which keys work.
+          if (root.inNode) return "h back   t console   o web   c copy   r refresh"
           if (root.inGuest) {
-            return "j/k move   h back   t console   o web   c copy"
+            return "h back   t console   o web   c copy"
               + (root.canReset ? "   F reset" : "") + "   r refresh"
           }
           // F works from the list too — it acts on the guest under the cursor —
