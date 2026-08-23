@@ -623,45 +623,6 @@ function buildGuestView(state) {
   // What this panel can do to the guest's *session* — which is to say, to this
   // machine's idea of the guest. Nothing here touches the cluster.
   //
-  // Both of these already existed as things the plugin could do; neither was
-  // anywhere on screen. `F` forgets a guest's console state, and the web
-  // button has always gone somewhere — but a keybinding named only in a legend
-  // and a destination you cannot see are not the same as being told what they
-  // are.
-  var actions = []
-
-  actions.push({
-    kind: "kv", key: key + "/web", title: "Web page",
-    value: state.webCustom
-      ? String(state.webUrl)
-      // Wording sized to the row: the value column elides past roughly forty
-      // characters, and a hint that gets cut in half is not a hint.
-      : "Proxmox page  ·  set one at the prompt",
-    tone: state.webCustom ? "normal" : "dim",
-    glyph: glyphFor("web"), action: "web", selectable: true
-  })
-
-  // Named for what it actually drops on this guest. A container's console is
-  // `pct enter` on its node, so it has no address of its own and no password
-  // here — only the web page it was asked for. Listing an address and a
-  // password for one would promise a reset of things it never had.
-  //
-  // An SSH key is not in either list: it is authorization granted on the guest,
-  // not a secret held here, and it is revoked in that account's
-  // ~/.ssh/authorized_keys rather than from a panel on this machine.
-  if (state.canForget) {
-    actions.push({
-      // Short titles only: the column is 74px and elides anything longer,
-      // which reads as a truncation bug rather than a label.
-      kind: "kv", key: key + "/forget", title: "Reset",
-      value: (guest.type === "qemu" ? "address, password and web page" : "web page")
-        + "  ·  F",
-      tone: "dim", glyph: glyphFor("reset"), action: "forget", selectable: true
-    })
-  }
-
-  groups.push({ title: "SESSION", rows: actions })
-
   return flatten(groups)
 }
 

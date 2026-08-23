@@ -207,11 +207,6 @@ Item {
       // knowing when the console will not connect.
       addressPinned: selectedGuest
         ? !!resolvedAddresses[String(selectedGuest.vmid)] : false,
-      webUrl: guestWebUrl(selectedGuest),
-      webCustom: hasCustomWebPage(selectedGuest),
-      // Every guest has something to drop now that containers are asked for a
-      // web page too; only the VM path adds an address and a password to it.
-      canForget: !!selectedGuest,
       thresholds: { memWarn: memWarn, memClear: memClear },
       alarmMemo: alarmMemo,
       showTemplates: showTemplates,

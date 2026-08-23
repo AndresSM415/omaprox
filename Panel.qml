@@ -378,7 +378,6 @@ Panel {
       if (row.link) pve.openUrl(row.link)
       return
     }
-    if (row.action) { runRowAction(row.action); return }
     // From the list, Enter drills into a guest or a node; once inside, it has
     // nowhere left to go and opens the web UI instead.
     if (!inGuest && !inNode && (row.kind === "guest" || row.kind === "node")) {
@@ -386,16 +385,6 @@ Panel {
       return
     }
     openWebUi()
-  }
-
-  // The SESSION rows in the guest view. `forget` deliberately leaves the panel
-  // open: it has something to say afterwards, and closing over the top of the
-  // status line would make it an action with no visible outcome.
-  function runRowAction(action) {
-    var guest = actionGuest
-    if (!guest) return
-    if (action === "web") { pve.openWebUi(guest); close(); return }
-    if (action === "forget") pve.forgetCredentials(guest)
   }
 
   function openWebUi() {
@@ -873,11 +862,9 @@ Panel {
               width: parent.width
               height: rowLoader.implicitHeight
               hasCursor: root.cursorActive && root.cursorIndex === rowItem.index
-              // Link rows and action rows stay painted as selected: a
-              // permanent affordance that the row is actionable, independent
-              // of the cursor. A fact and a button look identical until one of
-              // them says otherwise.
-              current: !!(rowItem.rowData && (rowItem.rowData.link || rowItem.rowData.action))
+              // Link rows stay painted as selected: a permanent affordance
+              // that the row is actionable, independent of the cursor.
+              current: !!(rowItem.rowData && rowItem.rowData.link)
 
               Loader {
                 id: rowLoader
@@ -1321,8 +1308,6 @@ Panel {
     property var row: null
     property int rowIndex: -1
 
-    readonly property bool isAction: !!(kvEntry.row && kvEntry.row.action)
-
     implicitHeight: kvInner.implicitHeight + Style.spacing.md
 
     Item {
@@ -1349,8 +1334,7 @@ Panel {
       Text {
         id: kvValue
         anchors.left: kvTitle.right
-        anchors.right: kvGlyph.visible ? kvGlyph.left : parent.right
-        anchors.rightMargin: kvGlyph.visible ? Style.space(6) : 0
+        anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         text: kvEntry.row ? String(kvEntry.row.value || "") : ""
         color: {
@@ -1362,31 +1346,6 @@ Panel {
         font.family: root.fontFamily
         font.pixelSize: Style.font.bodySmall
         elide: Text.ElideRight
-      }
-
-      // The right edge, where a row that does something says so in one
-      // character rather than in more prose at the end of the value.
-      Text {
-        id: kvGlyph
-        anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        visible: text !== ""
-        text: kvEntry.row ? String(kvEntry.row.glyph || "") : ""
-        color: root.dim
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.bodySmall
-      }
-    }
-
-    MouseArea {
-      anchors.fill: parent
-      enabled: kvEntry.isAction
-      hoverEnabled: true
-      cursorShape: Qt.PointingHandCursor
-      onEntered: root.setCursor(kvEntry.rowIndex)
-      onClicked: {
-        root.setCursor(kvEntry.rowIndex)
-        root.runRowAction(kvEntry.row.action)
       }
     }
   }
