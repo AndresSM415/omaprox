@@ -341,6 +341,9 @@ Panel {
     if (!inGuest && !inNode) return false
     pve.selectGuest("")
     cursorIndex = overviewCursor
+    // The list has a cursor again, and it belongs where it was when you
+    // drilled in rather than nowhere.
+    cursorActive = true
     clampCursor()
     return true
   }
@@ -631,7 +634,13 @@ Panel {
       blocked: root.filtering
 
       onMoveRequested: function(dx, dy) {
-        if (!root.cursorMeaningful) return
+        // A readout has no cursor to move, but left is still how you get out
+        // of one — it is the drill-down axis rather than cursor movement, and
+        // swallowing the whole signal took `h`'s arrow twin with it.
+        if (!root.cursorMeaningful) {
+          if (dx < 0) root.goBack()
+          return
+        }
         if (!root.cursorActive) { root.cursorActive = true; return }
         root.moveCursor(dx, dy)
       }
