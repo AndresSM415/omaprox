@@ -210,12 +210,23 @@ function normalizeWebUrl(value) {
 //
 // Boolean options are bare words in a curl config — `insecure = true` is
 // rejected as trailing garbage and kills the whole request.
+// Nothing a Proxmox cluster legitimately answers with comes close to this —
+// `cluster/resources` on a large cluster is a few hundred KB. It exists to
+// bound what a compromised or impersonated endpoint can make the shell hold:
+// the collector on the other end buffers a whole response in memory, and that
+// process is the entire Omarchy desktop, not just this widget.
+var MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+
 function curlConfig(token, url, options) {
   var opts = options || {};
   var lines = [
     "silent",
     "show-error",
     "max-time = 20",
+    // curl 8 enforces this during the transfer, not only from a declared
+    // Content-Length: a chunked flood aborts at the limit with exit 63.
+    // Measured, not assumed.
+    "max-filesize = " + MAX_RESPONSE_BYTES,
     'header = "Authorization: PVEAPIToken=' + token + '"',
     'header = "Accept: application/json"',
   ];
@@ -231,8 +242,21 @@ function curlConfig(token, url, options) {
   return lines.join("\n") + "\n";
 }
 
+// `head -c` is the second cap, and it is not redundant: older curl documented
+// max-filesize as having no effect when the length is unknown, and the limit
+// only helps at all if the curl on PATH is the one we think it is. This
+// truncates whatever the transfer does.
+//
+// The command text is a constant — no value is interpolated into it — and
+// `pipefail` keeps curl's own exit code, which is what curlFailure() reads.
+// An over-cap response therefore surfaces as a transport failure (63, or 23
+// when head closes the pipe first) rather than as truncated JSON that might
+// still parse.
 function curlGet() {
-  return ["curl", "-K", "-"];
+  return [
+    "bash", "-c",
+    "set -o pipefail; curl -K - | head -c " + MAX_RESPONSE_BYTES,
+  ];
 }
 
 // Splits the trailing status line off, then unwraps Proxmox's {data: …}.
