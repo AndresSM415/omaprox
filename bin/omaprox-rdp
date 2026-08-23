@@ -33,10 +33,26 @@ set -uo pipefail
 VMID=""
 while [[ ${1:-} == --* ]]; do
   case $1 in
-    --vmid) VMID=${2:-}; shift 2 ;;
+    # Everything after this is data. The panel emits it, and without it a
+    # positional that merely looks like an option — an address of "--vmid",
+    # say — re-entered this loop and took its value from the argument after
+    # it, which is the guest's name.
+    --) shift; break ;;
+    --vmid)
+      [[ $# -ge 2 ]] || { echo "--vmid needs a value" >&2; exit 2; }
+      VMID=$2; shift 2 ;;
     *) break ;;
   esac
 done
+
+# A vmid is a Proxmox integer. Anything else means the argv was not shaped the
+# way this script assumed, and it must never reach the stores below: the key is
+# matched against file contents, and a key carrying metacharacters is a key
+# that can be read as code rather than as a name.
+if [[ -n $VMID && ! $VMID =~ ^[0-9]+$ ]]; then
+  echo "omaprox-rdp: refusing a non-numeric vmid" >&2
+  exit 2
+fi
 
 ADDRESS=${1:-}
 LABEL=${2:-${1:-}}
@@ -57,10 +73,19 @@ WEBPAGES_FILE=${XDG_CONFIG_HOME:-$HOME/.config}/omaprox/webpages
 
 # `vmid = value`, one per line — the same store bin/omaprox-ssh writes to and
 # the same `key = value` shape as the token file.
+# The key is compared as a literal string, never interpolated into a regex or
+# a sed script. `awk -v` hands it over as data, so a key is only ever a name.
 lookup_in() {
   [[ -n $VMID && -f $1 ]] || return 1
   local v
-  v=$(sed -n "s/^[[:space:]]*${VMID}[[:space:]]*=[[:space:]]*//p" "$1" | tail -1)
+  v=$(awk -v k="$VMID" '
+        { eq = index($0, "=")
+          if (eq == 0) next
+          key = substr($0, 1, eq - 1); val = substr($0, eq + 1)
+          gsub(/^[ \t]+|[ \t]+$/, "", key)
+          sub(/^[ \t]+/, "", val)
+          if (key == k) out = val }
+        END { if (out != "") print out }' "$1")
   [[ -n $v ]] || return 1
   printf '%s' "$v"
 }
@@ -69,12 +94,28 @@ lookup_in() {
 # this" and "never set this" leave the file in the same state.
 store_in() {
   [[ -n $VMID ]] || return 0
+  # One entry is one line. A value carrying a newline would write a second
+  # line and so forge an entry for a vmid nobody touched — which is how a
+  # hostile guest name could pin another guest's console to a host of its
+  # choosing.
+  case $2 in
+    *$'\n'* | *$'\r'*)
+      echo "omaprox-rdp: refusing to store a multi-line value" >&2
+      return 1 ;;
+  esac
   mkdir -p "$(dirname "$1")"
   local tmp
-  tmp=$(mktemp "$1.XXXXXX")
-  { [[ -f $1 ]] && grep -vE "^[[:space:]]*${VMID}[[:space:]]*=" "$1"
+  tmp=$(mktemp "$1.XXXXXX") || return 1
+  { [[ -f $1 ]] && awk -v k="$VMID" '
+        { eq = index($0, "=")
+          if (eq > 0) {
+            key = substr($0, 1, eq - 1)
+            gsub(/^[ \t]+|[ \t]+$/, "", key)
+            if (key == k) next
+          }
+          print }' "$1"
     [[ -n $2 ]] && printf '%s = %s\n' "$VMID" "$2"; } >"$tmp"
-  mv "$tmp" "$1"
+  mv "$tmp" "$1" || { rm -f "$tmp"; return 1; }
 }
 
 lookup_address() { lookup_in "$ADDRESSES_FILE"; }

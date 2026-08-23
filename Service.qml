@@ -647,6 +647,7 @@ Item {
         lxcCommand = Util.shellQuote(helperPath("omaprox-ssh"))
           + " --vmid " + Util.shellQuote(String(guest.vmid))
           + " --guess " + Util.shellQuote(guest.name)
+          + " --"
           + " " + Util.shellQuote(nodeSshUser)
           + " " + Util.shellQuote(lxcHost)
           + " pct enter " + Util.shellQuote(String(guest.vmid))
@@ -675,8 +676,11 @@ Item {
         // the guessed guest name: that guess is exactly what used to be tried
         // silently and fail, and passing it through would give the helper no
         // way to tell a real address from a hopeful one.
+        // "--" closes the option list. Without it an address the cluster
+        // supplied that merely looks like a flag is parsed as one, and the
+        // helper takes its vmid from the argument after it.
         Quickshell.execDetached([
-          helperPath("omaprox-rdp"), "--vmid", String(guest.vmid),
+          helperPath("omaprox-rdp"), "--vmid", String(guest.vmid), "--",
           resolved.known ? address : "", guest.name
         ].concat(rdpUser !== "" ? ["/u:" + rdpUser] : []))
         flashStatus(resolved.known ? "RDP: " + address : "RDP: " + guest.name + " — resolving address")
@@ -701,6 +705,7 @@ Item {
       : Util.shellQuote(helperPath("omaprox-ssh"))
         + " --vmid " + Util.shellQuote(String(guest.vmid))
         + " --guess " + Util.shellQuote(guest.name)
+        + " --"
         + " " + Util.shellQuote(guestSshUser)
         + " " + Util.shellQuote(resolved.known ? address : "")
     runInTerminal(vmCommand, title)
@@ -718,14 +723,15 @@ Item {
     if (forgetReq.running) return
     var key = Model.guestKey(guest)
     var config = configs[key] || null
-    var address = Api.resolveAddress(guest, config, agentAddresses[key] || "",
-      addressOverrides, resolvedAddresses).address
-    // The address is only handed over for a VM. It is what the keyring entry
-    // is filed under, and a container has no saved password to clear — passing
-    // its address anyway would aim `secret-tool clear` at whatever else on the
-    // network happens to answer to the same name.
-    forgetReq.command = guest.type === "qemu"
-      ? [helperPath("omaprox-forget"), String(guest.vmid), address]
+    var resolved = Api.resolveAddress(guest, config, agentAddresses[key] || "",
+      addressOverrides, resolvedAddresses)
+    // The address is handed over only for a VM, and only when something
+    // actually resolved one. It is the key the keyring entry is filed under: a
+    // container has no saved password to clear, and an unresolved address is
+    // the guest's own *name*, so passing it would aim `secret-tool clear` at
+    // whatever else on the network answers to that name.
+    forgetReq.command = guest.type === "qemu" && resolved.known
+      ? [helperPath("omaprox-forget"), String(guest.vmid), resolved.address]
       : [helperPath("omaprox-forget"), String(guest.vmid)]
     forgetReq.running = true
   }

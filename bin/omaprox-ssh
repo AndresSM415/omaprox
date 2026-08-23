@@ -24,11 +24,25 @@ VMID=""
 GUESS=""
 while [[ ${1:-} == --* ]]; do
   case $1 in
-    --vmid) VMID=${2:-}; shift 2 ;;
-    --guess) GUESS=${2:-}; shift 2 ;;
+    # Everything after this is data, however much it looks like an option.
+    --) shift; break ;;
+    --vmid)
+      [[ $# -ge 2 ]] || { echo "--vmid needs a value" >&2; exit 2; }
+      VMID=$2; shift 2 ;;
+    --guess)
+      [[ $# -ge 2 ]] || { echo "--guess needs a value" >&2; exit 2; }
+      GUESS=$2; shift 2 ;;
     *) break ;;
   esac
 done
+
+# A vmid is a Proxmox integer, and it is matched against the contents of the
+# stores below. A key carrying metacharacters is a key that can be read as
+# something other than a name.
+if [[ -n $VMID && ! $VMID =~ ^[0-9]+$ ]]; then
+  echo "omaprox-ssh: refusing a non-numeric vmid" >&2
+  exit 2
+fi
 
 USER_NAME=${1:-root}
 HOST=${2:-}
@@ -40,45 +54,58 @@ ADDRESSES_FILE=${XDG_CONFIG_HOME:-$HOME/.config}/omaprox/addresses
 # `vmid = address`, one per line, the same `key = value` shape as the token
 # file. Proxmox enforces cluster-wide unique vmids, so the vmid alone is
 # enough to key on — no need to also track which node or guest type.
-lookup_address() {
-  [[ -n $VMID && -f $ADDRESSES_FILE ]] || return 1
+# The key is compared as a literal string rather than interpolated into a
+# regex or a sed script; `awk -v` hands it over as data.
+lookup_in() {
+  [[ -n $VMID && -f $1 ]] || return 1
   local v
-  v=$(sed -n "s/^[[:space:]]*${VMID}[[:space:]]*=[[:space:]]*//p" "$ADDRESSES_FILE" | tail -1)
+  v=$(awk -v k="$VMID" '
+        { eq = index($0, "=")
+          if (eq == 0) next
+          key = substr($0, 1, eq - 1); val = substr($0, eq + 1)
+          gsub(/^[ \t]+|[ \t]+$/, "", key)
+          sub(/^[ \t]+/, "", val)
+          if (key == k) out = val }
+        END { if (out != "") print out }' "$1")
   [[ -n $v ]] || return 1
   printf '%s' "$v"
 }
 
-store_address() {
+# One entry is one line. A value carrying a newline would forge an entry for a
+# vmid nobody touched, pinning another guest's console to a host of its
+# choosing — the guest name reaches here as a fallback, so it must be checked.
+store_in() {
   [[ -n $VMID ]] || return 0
-  mkdir -p "$(dirname "$ADDRESSES_FILE")"
+  case $2 in
+    *$'\n'* | *$'\r'*)
+      echo "omaprox-ssh: refusing to store a multi-line value" >&2
+      return 1 ;;
+  esac
+  mkdir -p "$(dirname "$1")"
   local tmp
-  tmp=$(mktemp "${ADDRESSES_FILE}.XXXXXX")
-  { [[ -f $ADDRESSES_FILE ]] && grep -vE "^[[:space:]]*${VMID}[[:space:]]*=" "$ADDRESSES_FILE"
-    printf '%s = %s\n' "$VMID" "$1"; } >"$tmp"
-  mv "$tmp" "$ADDRESSES_FILE"
+  tmp=$(mktemp "$1.XXXXXX") || return 1
+  { [[ -f $1 ]] && awk -v k="$VMID" '
+        { eq = index($0, "=")
+          if (eq > 0) {
+            key = substr($0, 1, eq - 1)
+            gsub(/^[ \t]+|[ \t]+$/, "", key)
+            if (key == k) next
+          }
+          print }' "$1"
+    [[ -n $2 ]] && printf '%s = %s\n' "$VMID" "$2"; } >"$tmp"
+  mv "$tmp" "$1" || { rm -f "$tmp"; return 1; }
 }
+
+lookup_address() { lookup_in "$ADDRESSES_FILE"; }
+
+store_address() { store_in "$ADDRESSES_FILE" "$1"; }
 
 # The guest's own web page, in a second file of the same shape — see
 # bin/omaprox-rdp, which asks the same question and writes the same store.
 WEBPAGES_FILE=${XDG_CONFIG_HOME:-$HOME/.config}/omaprox/webpages
 
-lookup_webpage() {
-  [[ -n $VMID && -f $WEBPAGES_FILE ]] || return 1
-  local v
-  v=$(sed -n "s/^[[:space:]]*${VMID}[[:space:]]*=[[:space:]]*//p" "$WEBPAGES_FILE" | tail -1)
-  [[ -n $v ]] || return 1
-  printf '%s' "$v"
-}
-
-store_webpage() {
-  [[ -n $VMID ]] || return 0
-  mkdir -p "$(dirname "$WEBPAGES_FILE")"
-  local tmp
-  tmp=$(mktemp "${WEBPAGES_FILE}.XXXXXX")
-  { [[ -f $WEBPAGES_FILE ]] && grep -vE "^[[:space:]]*${VMID}[[:space:]]*=" "$WEBPAGES_FILE"
-    [[ -n $1 ]] && printf '%s = %s\n' "$VMID" "$1"; } >"$tmp"
-  mv "$tmp" "$WEBPAGES_FILE"
-}
+lookup_webpage() { lookup_in "$WEBPAGES_FILE"; }
+store_webpage()  { store_in "$WEBPAGES_FILE" "$1"; }
 
 if [[ -z $HOST && -n $VMID ]]; then
   HOST=$(lookup_address) || HOST=""
