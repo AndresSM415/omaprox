@@ -701,7 +701,12 @@ Panel {
             id: pinButton
             visible: root.pinAvailable
             anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
+            // Hung from the top rather than centred. The row is as tall as the
+            // hero, and the hero's own trailing pill ("1 ALERT") rides on the
+            // title line — the first row of a Column centred in that height —
+            // so centring the pin here put it half a meta-line lower than the
+            // pill it sits beside.
+            anchors.top: parent.top
             iconText: Model.glyphFor("pin")
             tooltipText: root.pinned
               ? "Unpin — outside clicks will dismiss"
