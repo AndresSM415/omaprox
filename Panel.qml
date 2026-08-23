@@ -648,7 +648,14 @@ Panel {
         Item {
           id: pinRowHost
           width: parent.width
-          height: pinButton.height
+          // Tall enough for whichever of the two is taller, which is the hero
+          // every time — it stacks an icon, a title, a meta line and a detail
+          // pill, against a 20px button. Sized to the button alone, this row
+          // under-reported its height by more than half: the hero overflowed
+          // it, and the Column measured its spacing from a boundary sitting
+          // inside the hero, so the next section landed hard against the
+          // "3 UP · 1 DOWN" line instead of clear of it.
+          height: Math.max(hero.implicitHeight, pinButton.height)
 
           PanelHero {
             id: hero
