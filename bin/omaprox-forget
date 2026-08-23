@@ -4,11 +4,17 @@
 #
 #   omaprox-forget <vmid> [address]
 #
-# Clears the resolved address remembered under this vmid in
-# ~/.config/omaprox/addresses (the file bin/omaprox-ssh and bin/omaprox-rdp
-# both write to), and the RDP password saved in the login keyring under
-# whichever address is passed — the caller's live, currently-resolved one,
-# since that is the key those credentials were actually filed under.
+# Clears everything the console prompt remembered about this guest: the
+# resolved address under this vmid in ~/.config/omaprox/addresses, the web page
+# under the same vmid in ~/.config/omaprox/webpages (both files are written by
+# bin/omaprox-ssh and bin/omaprox-rdp), and the RDP password saved in the login
+# keyring under whichever address is passed — the caller's live,
+# currently-resolved one, since that is the key those credentials were actually
+# filed under.
+#
+# All of it or none of it. The prompt asks these questions together, so a reset
+# that dropped only some of them would leave you answering a form that is
+# already half filled in with the answers you just asked it to forget.
 #
 # There is deliberately nothing here for SSH beyond the address. An installed
 # SSH key is not a secret held on this machine to forget; it is authorization
@@ -26,14 +32,28 @@ if [[ -z $VMID ]]; then
   exit 2
 fi
 
-ADDRESSES_FILE=${XDG_CONFIG_HOME:-$HOME/.config}/omaprox/addresses
+CONFIG_DIR=${XDG_CONFIG_HOME:-$HOME/.config}/omaprox
+ADDRESSES_FILE=$CONFIG_DIR/addresses
+WEBPAGES_FILE=$CONFIG_DIR/webpages
+
+# Drop this vmid's line from one of the `vmid = value` stores. Returns 0 only
+# when there was something there, so the caller can report what actually
+# happened rather than what it attempted.
+drop_line() {
+  local file=$1 tmp
+  [[ -f $file ]] || return 1
+  grep -qE "^[[:space:]]*${VMID}[[:space:]]*=" "$file" || return 1
+  tmp=$(mktemp "$file.XXXXXX") || return 1
+  grep -vE "^[[:space:]]*${VMID}[[:space:]]*=" "$file" >"$tmp"
+  mv "$tmp" "$file" || { rm -f "$tmp"; return 1; }
+  return 0
+}
+
 forgot_address=0
-if [[ -f $ADDRESSES_FILE ]] && grep -qE "^[[:space:]]*${VMID}[[:space:]]*=" "$ADDRESSES_FILE"; then
-  tmp=$(mktemp "${ADDRESSES_FILE}.XXXXXX")
-  grep -vE "^[[:space:]]*${VMID}[[:space:]]*=" "$ADDRESSES_FILE" >"$tmp"
-  mv "$tmp" "$ADDRESSES_FILE"
-  forgot_address=1
-fi
+drop_line "$ADDRESSES_FILE" && forgot_address=1
+
+forgot_webpage=0
+drop_line "$WEBPAGES_FILE" && forgot_webpage=1
 
 forgot_password=0
 if [[ -n $ADDRESS ]] && command -v secret-tool >/dev/null 2>&1; then
@@ -50,7 +70,7 @@ if [[ -n $ADDRESS ]] && command -v secret-tool >/dev/null 2>&1; then
   fi
 fi
 
-if ((forgot_address || forgot_password)); then
+if ((forgot_address || forgot_password || forgot_webpage)); then
   echo "forgot"
 else
   echo "nothing stored"

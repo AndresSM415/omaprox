@@ -154,8 +154,16 @@ dropped, so a typo costs one line instead of a second trip through the
 panel.
 
 **Got the wrong address, or need to redo credentials?** Open the guest and
-press `F`, or click **Saved sign-in** under SESSION, to forget its saved
-address and password — the next console attempt asks for both again, fresh.
+press `F`, or click **Reset** under SESSION. That drops everything the console
+prompt remembered about the guest — the address, the saved password, and the
+web page — and the next console attempt asks for all three again, fresh.
+
+It is all or nothing on purpose: the prompt asks those questions together, so
+a reset that cleared only some of them would leave you answering a form already
+half filled in with the answers you just asked it to forget. To change one
+without touching the rest, open a console and edit that answer at the prompt —
+every question is prefilled, and `-` on the web page clears it.
+
 Linux guests have nothing to forget this way: an installed SSH key is
 authorization granted on the guest itself, not a secret held here, so it is
 removed from that account's `~/.ssh/authorized_keys` on the guest, not

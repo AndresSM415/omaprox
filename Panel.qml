@@ -749,7 +749,7 @@ Panel {
             // credential of its own to forget.
             var isQemu = pve.selectedGuest && pve.selectedGuest.type === "qemu"
             return "j/k move   h back   t console   o web   c copy"
-              + (isQemu ? "   F forget" : "") + "   r refresh"
+              + (isQemu ? "   F reset" : "") + "   r refresh"
           }
           return "j/k move   ⏎ stats   t console   o web   / search"
             + (root.pinAvailable ? "   p pin" : "") + "   r refresh"

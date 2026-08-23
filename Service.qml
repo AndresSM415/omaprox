@@ -734,7 +734,7 @@ Item {
     onExited: function() {
       var said = String(forgetOut.text || "").trim()
       root.flashStatus(said.indexOf("forgot") === 0
-        ? "Forgot " + forgetReq.guestName + " — you will be asked again"
+        ? "Reset " + forgetReq.guestName + " — the console will ask for the address, sign-in and web page again"
         : "Nothing was stored for " + forgetReq.guestName)
     }
   }

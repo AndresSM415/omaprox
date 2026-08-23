@@ -647,11 +647,10 @@ function buildGuestView(state) {
   // revoked on the server that trusts it, not from a panel on this one.
   if (state.canForget) {
     actions.push({
-      // "Sign-in" rather than "Saved sign-in": the title column is 74px and
-      // elides the longer one to "Saved sign…", which reads as a truncation
-      // bug rather than a label.
-      kind: "kv", key: key + "/forget", title: "Sign-in",
-      value: "forget the address and password  ·  F",
+      // Short titles only: the column is 74px and elides anything longer,
+      // which reads as a truncation bug rather than a label.
+      kind: "kv", key: key + "/forget", title: "Reset",
+      value: "address, password and web page  ·  F",
       tone: "dim", glyph: glyphFor("reset"), action: "forget", selectable: true
     })
   }
