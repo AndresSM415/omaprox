@@ -139,6 +139,12 @@ Panel {
     return n
   }
 
+  // Whether F means anything for whatever the cursor is on. Only a QEMU guest
+  // has console state of its own to drop: a container's console targets its
+  // node with `pct enter` and never stores an address, a password or a web
+  // page against the container itself.
+  readonly property bool canReset: !!(actionGuest && actionGuest.type === "qemu")
+
   // The guest the console and web-UI actions apply to: whichever one the
   // cursor is on in a list, or the open one in the detail view.
   readonly property var actionGuest: {
@@ -744,14 +750,14 @@ Panel {
           // Proxmox UI would be describing the behaviour it replaced.
           if (root.inNode) return "j/k move   h back   t console   o web   c copy   r refresh"
           if (root.inGuest) {
-            // F only means anything for a QEMU guest — a container's console
-            // always targets its node, so there is no saved address or
-            // credential of its own to forget.
-            var isQemu = pve.selectedGuest && pve.selectedGuest.type === "qemu"
             return "j/k move   h back   t console   o web   c copy"
-              + (isQemu ? "   F reset" : "") + "   r refresh"
+              + (root.canReset ? "   F reset" : "") + "   r refresh"
           }
-          return "j/k move   ⏎ stats   t console   o web   / search"
+          // F works from the list too — it acts on the guest under the cursor —
+          // so the overview has to say so rather than leaving it a key you only
+          // find by drilling into a guest first.
+          return "j/k move   ⏎ stats   t console   o web"
+            + (root.canReset ? "   F reset" : "") + "   / search"
             + (root.pinAvailable ? "   p pin" : "") + "   r refresh"
         }
         color: root.dim

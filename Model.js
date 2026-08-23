@@ -630,13 +630,19 @@ function buildGuestView(state) {
   // are.
   var actions = []
 
+  // Only a VM is ever asked for a web page. A container's console is `pct
+  // enter` on its node, which needs no address and so never reaches the prompt
+  // that would ask — telling a container "set one at the prompt" points at a
+  // prompt it does not have.
+  var canSetWebPage = guest.type === "qemu"
+
   actions.push({
     kind: "kv", key: key + "/web", title: "Web page",
     value: state.webCustom
       ? String(state.webUrl)
       // Wording sized to the row: the value column elides past roughly forty
       // characters, and a hint that gets cut in half is not a hint.
-      : "Proxmox page  ·  set one at the prompt",
+      : (canSetWebPage ? "Proxmox page  ·  set one at the prompt" : "Proxmox page for this guest"),
     tone: state.webCustom ? "normal" : "dim",
     glyph: glyphFor("web"), action: "web", selectable: true
   })

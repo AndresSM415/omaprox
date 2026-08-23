@@ -713,31 +713,25 @@ Item {
   // its node, never the guest itself, so there is no per-guest address or
   // credential riding on it.
   function forgetCredentials(guest) {
-    if (!guest || guest.type !== "qemu") {
-      flashStatus("Nothing to forget here")
-      return
-    }
+    // Silent on a container rather than explaining itself: F is not offered
+    // for one anywhere in the UI, so a message here would be answering a
+    // question nobody was invited to ask.
+    if (!guest || guest.type !== "qemu") return
     if (forgetReq.running) return
     var key = Model.guestKey(guest)
     var config = configs[key] || null
     var address = Api.resolveAddress(guest, config, agentAddresses[key] || "",
       addressOverrides, resolvedAddresses).address
     forgetReq.command = [helperPath("omaprox-forget"), String(guest.vmid), address]
-    forgetReq.guestName = guest.name
     forgetReq.running = true
   }
 
-  Process {
-    id: forgetReq
-    property string guestName: ""
-    stdout: StdioCollector { id: forgetOut; waitForEnd: true }
-    onExited: function() {
-      var said = String(forgetOut.text || "").trim()
-      root.flashStatus(said.indexOf("forgot") === 0
-        ? "Reset " + forgetReq.guestName + " — the console will ask for the address, sign-in and web page again"
-        : "Nothing was stored for " + forgetReq.guestName)
-    }
-  }
+  // No status line on the way out. The guest view already shows the result in
+  // the rows themselves — the address falls back to the guest's name, the web
+  // page falls back to the Proxmox one — and a banner announcing what is
+  // visible two lines below it is a second copy of the same news. The stores
+  // are watched, so those rows update on their own.
+  Process { id: forgetReq }
 
   // Scripts ship next to the QML, so the plugin stays a self-contained checkout
   // with nothing installed onto PATH.
