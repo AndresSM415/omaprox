@@ -707,6 +707,10 @@ Panel {
             // so centring the pin here put it half a meta-line lower than the
             // pill it sits beside.
             anchors.top: parent.top
+            // A pixel above that again. The tack's ink sits low in its own box
+            // — the pin head is wide and the spike tapers — so a box lined up
+            // with the pill still reads as sitting under it.
+            anchors.topMargin: -1
             iconText: Model.glyphFor("pin")
             tooltipText: root.pinned
               ? "Unpin — outside clicks will dismiss"
